@@ -1,0 +1,12 @@
+node_modules/
+.next/
+coverage/
+playwright-report/
+test-results/
+.firebase/
+firebase-debug.log
+*.tsbuildinfo
+.env
+*.local
+.env*.local
+Levantamento de requisitos*.csv
