@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "test:integration": "firebase emulators:exec --project demo-sistema-cabelo --only auth,firestore \"vitest run tests/integration/firestore-rules.test.ts\"",
     "test:e2e": "playwright test",
-    "emulators": "firebase emulators:start --project demo-sistema-cabelo"
+    "emulators": "firebase emulators:start --project demo-sistema-cabelo",
+    "firebase:set-admin": "node --env-file=.env.local scripts/set-admin-claims.mjs"
   },
   "dependencies": {
     "firebase": "12.17.0",

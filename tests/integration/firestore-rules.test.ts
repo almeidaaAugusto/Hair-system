@@ -35,4 +35,16 @@ describe("firestore rules", () => {
       testEnvironment.unauthenticatedContext().firestore().doc("appointments/test").set({}),
     );
   });
+
+  it("nega leituras diretas da configuração de expediente", async () => {
+    await assertFails(
+      testEnvironment.unauthenticatedContext().firestore().doc("businessHours/test").get(),
+    );
+  });
+
+  it("nega escritas diretas da configuração de expediente", async () => {
+    await assertFails(
+      testEnvironment.unauthenticatedContext().firestore().doc("businessHours/test").set({}),
+    );
+  });
 });

@@ -5,9 +5,8 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 import type { CreateServiceInput, Service } from "@/domain/services/service";
+import { AdminLoginForm, type AdminLoginFields } from "@/features/admin-auth/admin-login-form";
 import { getClientAuth } from "@/features/admin-services/firebase-client";
-
-type LoginFields = { email: string; password: string };
 
 async function readError(response: Response): Promise<string> {
   const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -19,7 +18,6 @@ export function ServicesAdminPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [message, setMessage] = useState<string>();
   const [isLoading, setIsLoading] = useState(false);
-  const loginForm = useForm<LoginFields>();
   const serviceForm = useForm<CreateServiceInput>({
     defaultValues: {
       durationMinutes: 60,
@@ -30,29 +28,36 @@ export function ServicesAdminPage() {
     },
   });
 
-  async function loadServices(currentToken: string) {
+  async function loadServices(currentToken: string): Promise<Service[]> {
     const response = await fetch("/api/admin/services", {
       headers: { Authorization: `Bearer ${currentToken}` },
     });
     if (!response.ok) throw new Error(await readError(response));
     const data = (await response.json()) as { services: Service[] };
-    setServices(data.services);
+    return data.services;
   }
 
-  async function login(fields: LoginFields) {
+  async function login(fields: AdminLoginFields) {
     setIsLoading(true);
     setMessage(undefined);
+    let hasAuthenticated = false;
     try {
       const credential = await signInWithEmailAndPassword(
         getClientAuth(),
         fields.email,
         fields.password,
       );
-      const currentToken = await credential.user.getIdToken();
+      const currentToken = await credential.user.getIdToken(true);
+      hasAuthenticated = true;
+      const currentServices = await loadServices(currentToken);
+      setServices(currentServices);
       setToken(currentToken);
-      await loadServices(currentToken);
-    } catch {
-      setMessage("Não foi possível iniciar a sessão administrativa.");
+    } catch (error) {
+      setMessage(
+        hasAuthenticated && error instanceof Error
+          ? error.message
+          : "Não foi possível iniciar a sessão administrativa.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -84,37 +89,21 @@ export function ServicesAdminPage() {
 
   if (!token) {
     return (
-      <main className="admin-page">
-        <section className="card" aria-labelledby="admin-login-title">
-          <h1 id="admin-login-title">Administração</h1>
-          <p>Entre para cadastrar e consultar serviços.</p>
-          <form onSubmit={loginForm.handleSubmit(login)}>
-            <label>
-              E-mail
-              <input type="email" autoComplete="email" required {...loginForm.register("email")} />
-            </label>
-            <label>
-              Senha
-              <input
-                type="password"
-                autoComplete="current-password"
-                required
-                {...loginForm.register("password")}
-              />
-            </label>
-            <button disabled={isLoading} type="submit">
-              {isLoading ? "Entrando…" : "Entrar"}
-            </button>
-          </form>
-          {message ? <p role="alert">{message}</p> : null}
-        </section>
-      </main>
+      <AdminLoginForm
+        description="Entre para cadastrar e consultar serviços."
+        isLoading={isLoading}
+        message={message}
+        onSubmit={login}
+      />
     );
   }
 
   return (
     <main className="admin-page">
       <section className="card" aria-labelledby="services-title">
+        <nav className="admin-nav" aria-label="Administração">
+          <a href="/admin/business-hours">Configurar expediente</a>
+        </nav>
         <h1 id="services-title">Serviços</h1>
         <form onSubmit={serviceForm.handleSubmit(submitService)}>
           <label>

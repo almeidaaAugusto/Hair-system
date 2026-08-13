@@ -42,6 +42,7 @@
 - Armazenar fotos fora do Firestore, com acesso controlado, metadados mínimos e prazo de retenção definido.
 - Implementar a integração de WhatsApp por uma camada de envio desacoplada, iniciando com registros de intenção/estado antes do provedor escolhido.
 - Até haver uma estratégia de equipe, o acesso administrativo exigirá um token Firebase com as claims `admin: true` e `salonId`; o servidor determina o salão a partir dessas claims.
+- Para o MVP, o expediente semanal será um único documento por `salonId` e profissional interna `primary`. A futura expansão para mais profissionais criará um documento de expediente por profissional, sem alterar o isolamento por salão.
 
 ## Itens fora do MVP
 

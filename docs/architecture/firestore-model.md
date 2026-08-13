@@ -21,7 +21,7 @@
 | `salons`            | `id`, `name`, `timezone`                                                                                         | Identidade do salão e timezone padrão.                                       |
 | `services`          | `salonId`, `name`, `durationMinutes`, `startingPriceCents`, `hasVariablePrice`, `requiresEvaluation`, `isActive` | Catálogo administrativo.                                                     |
 | `professionals`     | `salonId`, `name`, `active`                                                                                      | Profissional; há uma no MVP, mas a referência previne reestruturação futura. |
-| `businessHours`     | `salonId`, `professionalId`, `weekday`, `startLocalTime`, `endLocalTime`, `timezone`                             | Expediente configurável.                                                     |
+| `businessHours`     | `salonId`, `professionalId`, `timezone`, `appointmentIntervalMinutes`, `weeklyHours`                             | Expediente configurável por profissional.                                    |
 | `timeBlocks`        | `salonId`, `professionalId`, `startAt`, `endAt`, `reason`, `status`                                              | Bloqueios de agenda.                                                         |
 | `appointments`      | ver abaixo                                                                                                       | Registro operacional e histórico do atendimento.                             |
 | `paymentRecords`    | `salonId`, `appointmentId`, `amountCents`, `method`, `paidAt`                                                    | Pagamentos e valores em aberto.                                              |
@@ -43,6 +43,12 @@ createdAt, updatedAt, cancelledAt?
 ```
 
 `occupiedUntilAt` representa `endAt` mais o intervalo configurado e deve ser usado na verificação de conflito. O formato de `client` e a presença de foto ficam pendentes de decisão de privacidade e armazenamento.
+
+### Documento `businessHours`
+
+Há um documento por par `salonId` e `professionalId`. No MVP, o único identificador interno de profissional é `primary`; a interface não permite escolher ou cadastrar profissionais. O documento contém o fuso `America/Sao_Paulo`, o intervalo entre atendimentos em minutos e um mapa `weeklyHours` com segunda a domingo. Cada dia possui `isOpen`, `startLocalTime` e `endLocalTime` no formato `HH:mm`.
+
+Esse formato mantém a atualização semanal atômica e permite criar outro documento quando houver mais de uma profissional, sem migrar a configuração já existente.
 
 ### Acesso e consistência
 
