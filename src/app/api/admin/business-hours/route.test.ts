@@ -67,4 +67,24 @@ describe("business hours administration route", () => {
     expect(response.status).toBe(403);
     expect(mocks.updateBusinessHours).not.toHaveBeenCalled();
   });
+
+  it("registra o motivo de uma falha interna sem expô-lo ao navegador", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.authenticateAdmin.mockRejectedValue(
+      new Error("FIREBASE_SERVICE_ACCOUNT_JSON deve conter um JSON válido."),
+    );
+
+    const response = await GET(new Request("http://localhost/api/admin/business-hours"));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "Não foi possível concluir a operação.",
+    });
+    expect(errorLog).toHaveBeenCalledWith("Falha inesperada em /api/admin/business-hours", {
+      errorName: "Error",
+      message: "FIREBASE_SERVICE_ACCOUNT_JSON deve conter um JSON válido.",
+    });
+
+    errorLog.mockRestore();
+  });
 });

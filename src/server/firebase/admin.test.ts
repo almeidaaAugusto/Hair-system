@@ -46,6 +46,26 @@ describe("getAdminApp", () => {
     expect(mocks.initializeApp).toHaveBeenCalledWith({ credential, projectId: "hair-sys" });
   });
 
+  it("remove espaços acidentais ao redor do JSON da conta de serviço", () => {
+    const serviceAccount = { project_id: "hair-sys" };
+    const credential = { source: "service-account" };
+    const app = { name: "[DEFAULT]" };
+    vi.stubEnv("FIREBASE_SERVICE_ACCOUNT_JSON", `  ${JSON.stringify(serviceAccount)}  `);
+    mocks.cert.mockReturnValue(credential);
+    mocks.initializeApp.mockReturnValue(app);
+
+    expect(getAdminApp()).toBe(app);
+    expect(mocks.cert).toHaveBeenCalledWith(serviceAccount);
+  });
+
+  it("explica quando a credencial privada não chegou à Vercel", () => {
+    vi.stubEnv("VERCEL", "1");
+
+    expect(() => getAdminApp()).toThrow(
+      "FIREBASE_SERVICE_ACCOUNT_JSON não está configurada para a Vercel.",
+    );
+  });
+
   it("explica quando a variável da conta de serviço não contém JSON", () => {
     vi.stubEnv("FIREBASE_SERVICE_ACCOUNT_JSON", "não-é-json");
 

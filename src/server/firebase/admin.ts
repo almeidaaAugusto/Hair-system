@@ -1,18 +1,25 @@
 import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
-import type { App } from "firebase-admin/app";
+import type { App, ServiceAccount } from "firebase-admin/app";
 
 function getAdminCredential() {
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
 
   if (!serviceAccountJson) {
+    if (process.env.VERCEL) {
+      throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON não está configurada para a Vercel.");
+    }
+
     return applicationDefault();
   }
 
+  let serviceAccount: ServiceAccount;
   try {
-    return cert(JSON.parse(serviceAccountJson));
+    serviceAccount = JSON.parse(serviceAccountJson) as ServiceAccount;
   } catch {
     throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON deve conter um JSON válido.");
   }
+
+  return cert(serviceAccount);
 }
 
 export function getAdminApp(): App {

@@ -1,6 +1,7 @@
 import { ZodError } from "zod";
 
 import { AuthorizationError, authenticateAdmin } from "@/server/auth/admin-context";
+import { logUnexpectedServerError } from "@/server/observability/log-unexpected-server-error";
 import { createService, listServices } from "@/server/services/create-service";
 import { createFirestoreServicesRepository } from "@/server/services/service-repository";
 
@@ -17,6 +18,7 @@ function errorResponse(error: unknown): Response {
       { status: 422 },
     );
   }
+  logUnexpectedServerError("/api/admin/services", error);
   return Response.json({ error: "Não foi possível concluir a operação." }, { status: 500 });
 }
 

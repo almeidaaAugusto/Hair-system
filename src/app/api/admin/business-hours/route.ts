@@ -6,6 +6,7 @@ import {
   updateBusinessHours,
 } from "@/server/business-hours/configure-business-hours";
 import { createFirestoreBusinessHoursRepository } from "@/server/business-hours/business-hours-repository";
+import { logUnexpectedServerError } from "@/server/observability/log-unexpected-server-error";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,6 +24,7 @@ function errorResponse(error: unknown): Response {
   if (error instanceof SyntaxError) {
     return Response.json({ error: "Corpo da requisição inválido." }, { status: 400 });
   }
+  logUnexpectedServerError("/api/admin/business-hours", error);
   return Response.json({ error: "Não foi possível concluir a operação." }, { status: 500 });
 }
 
