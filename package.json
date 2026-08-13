@@ -39,5 +39,10 @@
     "prettier": "3.9.6",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
+  },
+  "overrides": {
+    "jwks-rsa": {
+      "jose": "4.15.9"
+    }
   }
 }
