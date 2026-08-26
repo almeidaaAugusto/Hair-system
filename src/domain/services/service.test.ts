@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createServiceSchema } from "./service";
+import { createServiceSchema, updateServiceSchema } from "./service";
 
 describe("createServiceSchema", () => {
   it("aceita um serviço com preço variável e avaliação", () => {
@@ -27,5 +27,42 @@ describe("createServiceSchema", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("rejeita duração zero ou negativa", () => {
+    const input = {
+      name: "Corte",
+      startingPriceCents: 10_000,
+      hasVariablePrice: false,
+      requiresEvaluation: false,
+      isActive: true,
+    };
+
+    expect(createServiceSchema.safeParse({ ...input, durationMinutes: 0 }).success).toBe(false);
+    expect(createServiceSchema.safeParse({ ...input, durationMinutes: -1 }).success).toBe(false);
+  });
+
+  it("normalizes a name and rejects unknown fields", () => {
+    const result = createServiceSchema.safeParse({
+      name: "  Corte  ",
+      durationMinutes: 60,
+      startingPriceCents: 10_000,
+      hasVariablePrice: false,
+      requiresEvaluation: false,
+      isActive: true,
+      salonId: "attempted-cross-salon-write",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a strict status-only update", () => {
+    expect(updateServiceSchema.safeParse({ isActive: false }).success).toBe(true);
+    expect(
+      updateServiceSchema.safeParse({
+        isActive: false,
+        salonId: "attempted-cross-salon-write",
+      }).success,
+    ).toBe(false);
   });
 });

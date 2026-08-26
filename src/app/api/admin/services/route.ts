@@ -18,6 +18,12 @@ function errorResponse(error: unknown): Response {
       { status: 422 },
     );
   }
+  if (error instanceof SyntaxError) {
+    return Response.json(
+      { error: "Corpo da requisi\u00e7\u00e3o inv\u00e1lido." },
+      { status: 400 },
+    );
+  }
   logUnexpectedServerError("/api/admin/services", error);
   return Response.json({ error: "Não foi possível concluir a operação." }, { status: 500 });
 }

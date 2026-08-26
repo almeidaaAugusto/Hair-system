@@ -68,7 +68,7 @@ describe("business hours administration route", () => {
     expect(mocks.updateBusinessHours).not.toHaveBeenCalled();
   });
 
-  it("registra o motivo de uma falha interna sem expô-lo ao navegador", async () => {
+  it("registra a classe de uma falha interna sem expor detalhes sensíveis", async () => {
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
     mocks.authenticateAdmin.mockRejectedValue(
       new Error("FIREBASE_SERVICE_ACCOUNT_JSON deve conter um JSON válido."),
@@ -82,7 +82,6 @@ describe("business hours administration route", () => {
     });
     expect(errorLog).toHaveBeenCalledWith("Falha inesperada em /api/admin/business-hours", {
       errorName: "Error",
-      message: "FIREBASE_SERVICE_ACCOUNT_JSON deve conter um JSON válido.",
     });
 
     errorLog.mockRestore();

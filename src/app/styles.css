@@ -126,8 +126,140 @@ button:disabled {
   opacity: 0.6;
 }
 
+.services-card {
+  box-sizing: border-box;
+  max-width: 46rem;
+}
+
+.services-heading,
+.service-item,
+.service-item-actions,
+.service-form-actions,
+.service-indicators {
+  align-items: center;
+  display: flex;
+}
+
+.services-heading {
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.services-heading button,
+.service-form-actions button,
+.service-item-actions button,
+.services-empty button {
+  white-space: nowrap;
+}
+
+.services-list-section {
+  margin-top: 2rem;
+}
+
+.services-list,
+.services-empty {
+  display: grid;
+  gap: 0.75rem;
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.services-empty {
+  justify-items: start;
+}
+
+.service-item {
+  border: 1px solid #e8d9df;
+  border-radius: 0.5rem;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1rem;
+}
+
+.service-item h3,
+.service-form h2,
+.services-list-section h2 {
+  margin: 0;
+}
+
+.service-item-summary {
+  min-width: 0;
+}
+
+.service-item-summary p {
+  margin-top: 0.35rem;
+}
+
+.service-indicators {
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+}
+
+.service-indicators span {
+  background: #f7e9ef;
+  border-radius: 999px;
+  color: #6f2445;
+  font-size: 0.82rem;
+  padding: 0.25rem 0.55rem;
+}
+
+.service-indicators .status-active {
+  background: #e0f3e7;
+  color: #1c6b3c;
+}
+
+.service-indicators .status-inactive {
+  background: #f1eeee;
+  color: #5e5558;
+}
+
+.service-item-actions,
+.service-form-actions {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.service-form-actions {
+  justify-content: end;
+}
+
+.secondary-button {
+  background: white;
+  border: 1px solid #6f2445;
+  color: #6f2445;
+}
+
+.danger-button {
+  background: #9e3146;
+}
+
+.service-form-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.service-options {
+  display: grid;
+  gap: 0.6rem;
+}
+
 @media (width < 40rem) {
-  .business-hours-time {
+  .business-hours-time,
+  .service-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .services-heading,
+  .service-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .service-item-actions button,
+  .services-heading button {
+    width: 100%;
   }
 }

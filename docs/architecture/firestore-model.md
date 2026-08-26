@@ -16,16 +16,16 @@
 
 ### Coleções
 
-| Coleção             | Campos principais propostos                                                                                      | Finalidade                                                                   |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `salons`            | `id`, `name`, `timezone`                                                                                         | Identidade do salão e timezone padrão.                                       |
-| `services`          | `salonId`, `name`, `durationMinutes`, `startingPriceCents`, `hasVariablePrice`, `requiresEvaluation`, `isActive` | Catálogo administrativo.                                                     |
-| `professionals`     | `salonId`, `name`, `active`                                                                                      | Profissional; há uma no MVP, mas a referência previne reestruturação futura. |
-| `businessHours`     | `salonId`, `professionalId`, `timezone`, `appointmentIntervalMinutes`, `weeklyHours`                             | Expediente configurável por profissional.                                    |
-| `timeBlocks`        | `salonId`, `professionalId`, `startAt`, `endAt`, `reason`, `status`                                              | Bloqueios de agenda.                                                         |
-| `appointments`      | ver abaixo                                                                                                       | Registro operacional e histórico do atendimento.                             |
-| `paymentRecords`    | `salonId`, `appointmentId`, `amountCents`, `method`, `paidAt`                                                    | Pagamentos e valores em aberto.                                              |
-| `messageDeliveries` | `salonId`, `appointmentId`, `type`, `scheduledAt`, `sentAt`, `status`, `idempotencyKey`                          | Controle de mensagens e prevenção de lembrete duplicado.                     |
+| Coleção             | Campos principais propostos                                                                                                                | Finalidade                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `salons`            | `id`, `name`, `timezone`                                                                                                                   | Identidade do salão e timezone padrão.                                       |
+| `services`          | `salonId`, `name`, `durationMinutes`, `startingPriceCents`, `hasVariablePrice`, `requiresEvaluation`, `isActive`, `createdAt`, `updatedAt` | Catálogo administrativo; timestamps são mantidos pelo servidor.              |
+| `professionals`     | `salonId`, `name`, `active`                                                                                                                | Profissional; há uma no MVP, mas a referência previne reestruturação futura. |
+| `businessHours`     | `salonId`, `professionalId`, `timezone`, `appointmentIntervalMinutes`, `weeklyHours`                                                       | Expediente configurável por profissional.                                    |
+| `timeBlocks`        | `salonId`, `professionalId`, `startAt`, `endAt`, `reason`, `status`                                                                        | Bloqueios de agenda.                                                         |
+| `appointments`      | ver abaixo                                                                                                                                 | Registro operacional e histórico do atendimento.                             |
+| `paymentRecords`    | `salonId`, `appointmentId`, `amountCents`, `method`, `paidAt`                                                                              | Pagamentos e valores em aberto.                                              |
+| `messageDeliveries` | `salonId`, `appointmentId`, `type`, `scheduledAt`, `sentAt`, `status`, `idempotencyKey`                                                    | Controle de mensagens e prevenção de lembrete duplicado.                     |
 
 ### Documento `appointments`
 

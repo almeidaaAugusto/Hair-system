@@ -47,4 +47,24 @@ describe("firestore rules", () => {
       testEnvironment.unauthenticatedContext().firestore().doc("businessHours/test").set({}),
     );
   });
+
+  it("denies direct service reads even for an authenticated admin", async () => {
+    await assertFails(
+      testEnvironment
+        .authenticatedContext("admin-1", { admin: true, salonId: "salon-1" })
+        .firestore()
+        .doc("services/service-1")
+        .get(),
+    );
+  });
+
+  it("denies direct service writes even for an authenticated admin", async () => {
+    await assertFails(
+      testEnvironment
+        .authenticatedContext("admin-1", { admin: true, salonId: "salon-1" })
+        .firestore()
+        .doc("services/service-1")
+        .set({ name: "Corte", salonId: "salon-1" }),
+    );
+  });
 });

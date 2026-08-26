@@ -36,16 +36,38 @@ export function getBearerToken(authorization: string | null): string {
 }
 
 export function getAdminContext(claims: TokenClaims): AdminContext {
-  if (claims.admin !== true || typeof claims.salonId !== "string" || !claims.salonId) {
+  const salonId = typeof claims.salonId === "string" ? claims.salonId.trim() : "";
+
+  if (claims.admin !== true || !salonId) {
     throw new AuthorizationError("Acesso administrativo não autorizado.", 403);
   }
 
-  return { salonId: claims.salonId, userId: claims.uid };
+  return { salonId, userId: claims.uid };
+}
+
+function isFirebaseTokenError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    error.code.startsWith("auth/")
+  );
 }
 
 export async function authenticateAdmin(request: Request): Promise<AdminContext> {
   const token = getBearerToken(request.headers.get("authorization"));
-  const claims = await getAuth(getAdminApp()).verifyIdToken(token);
 
-  return getAdminContext(claims);
+  try {
+    const claims = await getAuth(getAdminApp()).verifyIdToken(token, true);
+    return getAdminContext(claims);
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      throw error;
+    }
+    if (isFirebaseTokenError(error)) {
+      throw new AuthorizationError("Token de autentica\u00e7\u00e3o inv\u00e1lido.", 401);
+    }
+    throw error;
+  }
 }
