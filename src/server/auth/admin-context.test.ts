@@ -12,13 +12,13 @@ describe("getAdminContext", () => {
 
   it("rejeita claims sem acesso administrativo", () => {
     expect(() => getAdminContext({ salonId: "salon-1", uid: "user-1" })).toThrow(
-      AuthorizationError,
+      expect.objectContaining({ status: 403 }),
     );
   });
 
   it("rejeita uma claim de sal\u00e3o composta apenas por espa\u00e7os", () => {
     expect(() => getAdminContext({ admin: true, salonId: "   ", uid: "user-1" })).toThrow(
-      AuthorizationError,
+      expect.objectContaining({ status: 403 }),
     );
   });
 });
