@@ -1,12 +1,11 @@
 "use client";
 
-import { signInWithEmailAndPassword } from "firebase/auth";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import type { CreateServiceInput, Service } from "@/domain/services/service";
-import { AdminLoginForm, type AdminLoginFields } from "@/features/admin-auth/admin-login-form";
-import { getClientAuth } from "@/features/admin-services/firebase-client";
+import { fetchAdmin } from "@/features/admin-auth/admin-api-client";
+import { AdminNavigation } from "@/features/admin-auth/admin-navigation";
 import { formatBrazilianReal, parseBrazilianRealToCents } from "@/features/admin-services/money";
 
 type ServiceFormFields = Omit<CreateServiceInput, "startingPriceCents"> & { startingPrice: string };
@@ -124,7 +123,6 @@ function ServiceForm({
 }
 
 export function ServicesAdminPage() {
-  const [token, setToken] = useState<string>();
   const [services, setServices] = useState<Service[]>([]);
   const [message, setMessage] = useState<string>();
   const [editingService, setEditingService] = useState<Service>();
@@ -133,6 +131,36 @@ export function ServicesAdminPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [restoreFocusId, setRestoreFocusId] = useState<string>();
   const formIsVisible = isCreating || Boolean(editingService);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadServices(): Promise<void> {
+      setIsLoadingServices(true);
+      setMessage(undefined);
+      try {
+        const response = await fetchAdmin("/api/admin/services");
+        if (!response.ok) throw new Error(await readError(response));
+        const data = (await response.json()) as { services: Service[] };
+        if (isMounted) {
+          setServices(data.services.sort((a, b) => a.name.localeCompare(b.name)));
+        }
+      } catch (error) {
+        if (isMounted) {
+          setMessage(
+            error instanceof Error ? error.message : "Não foi possível carregar os serviços.",
+          );
+        }
+      } finally {
+        if (isMounted) setIsLoadingServices(false);
+      }
+    }
+
+    void loadServices();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   function closeServiceForm(fallbackFocusId?: string) {
     const focusId = fallbackFocusId ?? restoreFocusId;
@@ -157,51 +185,16 @@ export function ServicesAdminPage() {
     setIsCreating(false);
   }
 
-  async function loadServices(currentToken: string): Promise<void> {
-    setIsLoadingServices(true);
-    setMessage(undefined);
-    try {
-      const response = await fetch("/api/admin/services", {
-        headers: { Authorization: `Bearer ${currentToken}` },
-      });
-      if (!response.ok) throw new Error(await readError(response));
-      const data = (await response.json()) as { services: Service[] };
-      setServices(data.services.sort((a, b) => a.name.localeCompare(b.name)));
-    } finally {
-      setIsLoadingServices(false);
-    }
-  }
-
-  async function login(fields: AdminLoginFields) {
-    setIsSaving(true);
-    setMessage(undefined);
-    try {
-      const credential = await signInWithEmailAndPassword(
-        getClientAuth(),
-        fields.email,
-        fields.password,
-      );
-      const currentToken = await credential.user.getIdToken(true);
-      await loadServices(currentToken);
-      setToken(currentToken);
-    } catch {
-      setMessage("Não foi possível iniciar a sessão administrativa.");
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
   async function saveService(input: CreateServiceInput) {
-    if (!token) return;
     const currentService = editingService;
     setIsSaving(true);
     setMessage(undefined);
     try {
-      const response = await fetch(
+      const response = await fetchAdmin(
         currentService ? `/api/admin/services/${currentService.id}` : "/api/admin/services",
         {
           body: JSON.stringify(input),
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json" },
           method: currentService ? "PATCH" : "POST",
         },
       );
@@ -225,7 +218,6 @@ export function ServicesAdminPage() {
   }
 
   async function changeActiveStatus(service: Service) {
-    if (!token) return;
     if (
       service.isActive &&
       !window.confirm(
@@ -236,9 +228,9 @@ export function ServicesAdminPage() {
     setIsSaving(true);
     setMessage(undefined);
     try {
-      const response = await fetch(`/api/admin/services/${service.id}`, {
+      const response = await fetchAdmin(`/api/admin/services/${service.id}`, {
         body: JSON.stringify({ isActive: !service.isActive }),
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         method: "PATCH",
       });
       if (!response.ok) throw new Error(await readError(response));
@@ -256,22 +248,10 @@ export function ServicesAdminPage() {
     }
   }
 
-  if (!token)
-    return (
-      <AdminLoginForm
-        description="Entre para cadastrar e consultar serviços."
-        isLoading={isSaving}
-        message={message}
-        onSubmit={login}
-      />
-    );
-
   return (
     <main className="admin-page">
       <section className="card services-card" aria-labelledby="services-title">
-        <nav className="admin-nav" aria-label="Administração">
-          <a href="/admin/business-hours">Configurar expediente</a>
-        </nav>
+        <AdminNavigation />
         <div className="services-heading">
           <div>
             <h1 id="services-title">Serviços</h1>

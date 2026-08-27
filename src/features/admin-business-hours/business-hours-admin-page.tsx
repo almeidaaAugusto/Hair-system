@@ -1,7 +1,6 @@
 "use client";
 
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import {
@@ -10,8 +9,8 @@ import {
   type BusinessHours,
   type BusinessHoursInput,
 } from "@/domain/business-hours/business-hours";
-import { AdminLoginForm, type AdminLoginFields } from "@/features/admin-auth/admin-login-form";
-import { getClientAuth } from "@/features/admin-services/firebase-client";
+import { fetchAdmin } from "@/features/admin-auth/admin-api-client";
+import { AdminNavigation } from "@/features/admin-auth/admin-navigation";
 
 type Weekday = keyof BusinessHoursInput["weeklyHours"];
 
@@ -31,58 +30,47 @@ async function readError(response: Response): Promise<string> {
 }
 
 export function BusinessHoursAdminPage() {
-  const [token, setToken] = useState<string>();
   const [message, setMessage] = useState<string>();
   const [isLoading, setIsLoading] = useState(false);
   const businessHoursForm = useForm<BusinessHoursInput>({
     defaultValues: createDefaultBusinessHoursInput(),
   });
+  const { reset: resetBusinessHours } = businessHoursForm;
   const weeklyHours = useWatch({
     control: businessHoursForm.control,
     defaultValue: createDefaultBusinessHoursInput().weeklyHours,
     name: "weeklyHours",
   });
 
-  async function loadBusinessHours(currentToken: string): Promise<BusinessHours> {
-    const response = await fetch("/api/admin/business-hours", {
-      headers: { Authorization: `Bearer ${currentToken}` },
-    });
-    if (!response.ok) throw new Error(await readError(response));
-    const data = (await response.json()) as { businessHours: BusinessHours };
-    return data.businessHours;
-  }
+  useEffect(() => {
+    let isMounted = true;
 
-  async function login(fields: AdminLoginFields) {
-    setIsLoading(true);
-    setMessage(undefined);
-    let hasAuthenticated = false;
-
-    try {
-      const credential = await signInWithEmailAndPassword(
-        getClientAuth(),
-        fields.email,
-        fields.password,
-      );
-      const currentToken = await credential.user.getIdToken(true);
-      hasAuthenticated = true;
-      const businessHours = await loadBusinessHours(currentToken);
-
-      businessHoursForm.reset(businessHours);
-      setToken(currentToken);
-    } catch (error) {
-      setMessage(
-        hasAuthenticated && error instanceof Error
-          ? error.message
-          : "Não foi possível iniciar a sessão administrativa.",
-      );
-    } finally {
-      setIsLoading(false);
+    async function loadBusinessHours(): Promise<void> {
+      setIsLoading(true);
+      setMessage(undefined);
+      try {
+        const response = await fetchAdmin("/api/admin/business-hours");
+        if (!response.ok) throw new Error(await readError(response));
+        const data = (await response.json()) as { businessHours: BusinessHours };
+        if (isMounted) resetBusinessHours(data.businessHours);
+      } catch (error) {
+        if (isMounted) {
+          setMessage(
+            error instanceof Error ? error.message : "Não foi possível carregar o expediente.",
+          );
+        }
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
     }
-  }
+
+    void loadBusinessHours();
+    return () => {
+      isMounted = false;
+    };
+  }, [resetBusinessHours]);
 
   async function submitBusinessHours(input: BusinessHoursInput) {
-    if (!token) return;
-
     const validation = businessHoursInputSchema.safeParse(input);
     if (!validation.success) {
       setMessage(validation.error.issues[0]?.message ?? "Revise os horários informados.");
@@ -93,15 +81,15 @@ export function BusinessHoursAdminPage() {
     setMessage(undefined);
 
     try {
-      const response = await fetch("/api/admin/business-hours", {
+      const response = await fetchAdmin("/api/admin/business-hours", {
         method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validation.data),
       });
       if (!response.ok) throw new Error(await readError(response));
       const data = (await response.json()) as { businessHours: BusinessHours };
 
-      businessHoursForm.reset(data.businessHours);
+      resetBusinessHours(data.businessHours);
       setMessage("Expediente atualizado com sucesso.");
     } catch (error) {
       setMessage(
@@ -112,23 +100,10 @@ export function BusinessHoursAdminPage() {
     }
   }
 
-  if (!token) {
-    return (
-      <AdminLoginForm
-        description="Entre para configurar o expediente semanal."
-        isLoading={isLoading}
-        message={message}
-        onSubmit={login}
-      />
-    );
-  }
-
   return (
     <main className="admin-page">
       <section className="card" aria-labelledby="business-hours-title">
-        <nav className="admin-nav" aria-label="Administração">
-          <a href="/admin/services">Gerenciar serviços</a>
-        </nav>
+        <AdminNavigation />
         <h1 id="business-hours-title">Expediente</h1>
         <p>Defina os dias e horários em que a profissional atende.</p>
         <form onSubmit={businessHoursForm.handleSubmit(submitBusinessHours)}>

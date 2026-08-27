@@ -64,13 +64,40 @@ label:has(input[type="checkbox"]) {
 }
 
 .admin-nav {
+  align-items: center;
   display: flex;
+  gap: 1rem;
+  justify-content: space-between;
   margin-bottom: 1.5rem;
 }
 
+.admin-nav-links {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
 .admin-nav a {
+  border-radius: 0.25rem;
   color: #6f2445;
   font-weight: 600;
+  padding: 0.25rem;
+}
+
+.admin-nav a[aria-current="page"] {
+  text-decoration-thickness: 0.15rem;
+  text-underline-offset: 0.3rem;
+}
+
+.admin-nav button {
+  white-space: nowrap;
+}
+
+.admin-status {
+  color: #782238;
+  font-weight: 600;
+  margin-top: 1rem;
 }
 
 .business-hours-days {
@@ -124,6 +151,13 @@ button {
 button:disabled {
   cursor: wait;
   opacity: 0.6;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid #d887aa;
+  outline-offset: 2px;
 }
 
 .services-card {
@@ -247,6 +281,15 @@ button:disabled {
 }
 
 @media (width < 40rem) {
+  .admin-nav {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-nav button {
+    width: 100%;
+  }
+
   .business-hours-time,
   .service-form-grid {
     grid-template-columns: 1fr;

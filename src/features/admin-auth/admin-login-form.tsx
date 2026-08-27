@@ -19,14 +19,21 @@ export function AdminLoginForm({ description, isLoading, message, onSubmit }: Ad
       <section className="card" aria-labelledby="admin-login-title">
         <h1 id="admin-login-title">Administração</h1>
         <p>{description}</p>
-        <form onSubmit={loginForm.handleSubmit(onSubmit)}>
-          <label>
+        <form aria-busy={isLoading} onSubmit={loginForm.handleSubmit(onSubmit)}>
+          <label htmlFor="admin-email">
             E-mail
-            <input type="email" autoComplete="email" required {...loginForm.register("email")} />
+            <input
+              id="admin-email"
+              type="email"
+              autoComplete="email"
+              required
+              {...loginForm.register("email")}
+            />
           </label>
-          <label>
+          <label htmlFor="admin-password">
             Senha
             <input
+              id="admin-password"
               type="password"
               autoComplete="current-password"
               required
@@ -37,7 +44,11 @@ export function AdminLoginForm({ description, isLoading, message, onSubmit }: Ad
             {isLoading ? "Entrando…" : "Entrar"}
           </button>
         </form>
-        {message ? <p role="alert">{message}</p> : null}
+        {message ? (
+          <p className="admin-status" role="alert">
+            {message}
+          </p>
+        ) : null}
       </section>
     </main>
   );
