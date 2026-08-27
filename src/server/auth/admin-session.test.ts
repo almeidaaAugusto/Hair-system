@@ -55,18 +55,30 @@ describe("admin session", () => {
       Object.assign(new Error("session expired"), { code: "auth/session-cookie-expired" }),
     );
 
-    await expect(verifyAdminSessionCookie("expired-session")).rejects.toMatchObject({
+    const error = await verifyAdminSessionCookie("expired-session").catch(
+      (error: unknown) => error,
+    );
+
+    expect(error).toBeInstanceOf(AuthorizationError);
+    expect(error).toMatchObject({
+      message: "Token de autenticação inválido.",
       status: 401,
     });
-    await expect(verifyAdminSessionCookie("expired-session")).rejects.toBeInstanceOf(
-      AuthorizationError,
-    );
+    expect((error as Error).message).not.toContain("session expired");
   });
 
-  it("rejects session claims without administration or a salon", async () => {
+  it("rejects session claims without administration", async () => {
     mocks.verifySessionCookie.mockResolvedValue({ admin: false, uid: "user-1" });
 
     await expect(verifyAdminSessionCookie("non-admin-session")).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
+  it("rejects an administrative session claim without a salon", async () => {
+    mocks.verifySessionCookie.mockResolvedValue({ admin: true, salonId: undefined, uid: "user-1" });
+
+    await expect(verifyAdminSessionCookie("missing-salon-session")).rejects.toMatchObject({
       status: 403,
     });
   });

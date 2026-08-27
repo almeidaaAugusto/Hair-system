@@ -1,23 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getAdminSessionCookie: vi.fn(),
   getAdminApp: vi.fn(),
   verifyIdToken: vi.fn(),
-  verifyAdminSessionCookie: vi.fn(),
+  verifySessionCookie: vi.fn(),
 }));
 
 vi.mock("firebase-admin/auth", () => ({
-  getAuth: () => ({ verifyIdToken: mocks.verifyIdToken }),
+  getAuth: () => ({
+    verifyIdToken: mocks.verifyIdToken,
+    verifySessionCookie: mocks.verifySessionCookie,
+  }),
 }));
 
 vi.mock("@/server/firebase/admin", () => ({
   getAdminApp: mocks.getAdminApp,
-}));
-
-vi.mock("./admin-session", () => ({
-  getAdminSessionCookie: mocks.getAdminSessionCookie,
-  verifyAdminSessionCookie: mocks.verifyAdminSessionCookie,
 }));
 
 import { AuthorizationError, authenticateAdmin, verifyAdminIdToken } from "./admin-context";
@@ -33,21 +30,18 @@ describe("authenticateAdmin", () => {
     });
     mocks.verifyIdToken.mockRejectedValue(invalidTokenError);
 
-    await expect(
-      authenticateAdmin(
-        new Request("http://localhost/api/admin/services", {
-          headers: { Authorization: "Bearer invalid-token" },
-        }),
-      ),
-    ).rejects.toMatchObject({ status: 401 });
+    const error = await authenticateAdmin(
+      new Request("http://localhost/api/admin/services", {
+        headers: { Authorization: "Bearer invalid-token" },
+      }),
+    ).catch((error: unknown) => error);
 
-    await expect(
-      authenticateAdmin(
-        new Request("http://localhost/api/admin/services", {
-          headers: { Authorization: "Bearer invalid-token" },
-        }),
-      ),
-    ).rejects.toBeInstanceOf(AuthorizationError);
+    expect(error).toBeInstanceOf(AuthorizationError);
+    expect(error).toMatchObject({
+      message: "Token de autenticação inválido.",
+      status: 401,
+    });
+    expect((error as Error).message).not.toContain("token expired");
   });
 
   it("checks whether an administrative token has been revoked", async () => {
@@ -87,7 +81,6 @@ describe("authenticateAdmin", () => {
     mocks.verifyIdToken.mockRejectedValue(
       Object.assign(new Error("token expired"), { code: "auth/id-token-expired" }),
     );
-    mocks.getAdminSessionCookie.mockReturnValue("session-cookie");
 
     await expect(
       authenticateAdmin(
@@ -100,21 +93,28 @@ describe("authenticateAdmin", () => {
       ),
     ).rejects.toMatchObject({ status: 401 });
 
-    expect(mocks.verifyAdminSessionCookie).not.toHaveBeenCalled();
+    expect(mocks.verifySessionCookie).not.toHaveBeenCalled();
   });
 
-  it("uses the session cookie when the authorization header is absent", async () => {
-    mocks.getAdminSessionCookie.mockReturnValue("session-cookie");
-    mocks.verifyAdminSessionCookie.mockResolvedValue({ salonId: "salon-1", userId: "user-1" });
+  it("uses the parsed session cookie when the authorization header is absent", async () => {
+    mocks.verifySessionCookie.mockResolvedValue({
+      admin: true,
+      salonId: "salon-1",
+      uid: "user-1",
+    });
 
     await expect(
-      authenticateAdmin(new Request("http://localhost/api/admin/services")),
+      authenticateAdmin(
+        new Request("http://localhost/api/admin/services", {
+          headers: { Cookie: "theme=dark; admin_session=session=value; locale=pt-BR" },
+        }),
+      ),
     ).resolves.toEqual({ salonId: "salon-1", userId: "user-1" });
+
+    expect(mocks.verifySessionCookie).toHaveBeenCalledWith("session=value", true);
   });
 
   it("rejects requests without a bearer token or session cookie", async () => {
-    mocks.getAdminSessionCookie.mockReturnValue(undefined);
-
     await expect(
       authenticateAdmin(new Request("http://localhost/api/admin/services")),
     ).rejects.toMatchObject({ status: 401 });
