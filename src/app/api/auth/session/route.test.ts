@@ -2,39 +2,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createAdminSessionCookie: vi.fn(),
-  getBearerToken: vi.fn(),
   logUnexpectedServerError: vi.fn(),
   verifyAdminIdToken: vi.fn(),
 }));
 
-vi.mock("@/server/auth/admin-context", () => {
-  class MockAuthorizationError extends Error {
-    constructor(
-      message: string,
-      readonly status: 401 | 403,
-    ) {
-      super(message);
-    }
-  }
-
+vi.mock("@/server/auth/admin-context", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/server/auth/admin-context")>();
   return {
-    AuthorizationError: MockAuthorizationError,
-    getBearerToken: mocks.getBearerToken,
+    ...actual,
     verifyAdminIdToken: mocks.verifyAdminIdToken,
   };
 });
 
-vi.mock("@/server/auth/admin-session", () => ({
-  ADMIN_SESSION_COOKIE_NAME: "admin_session",
-  createAdminSessionCookie: mocks.createAdminSessionCookie,
-  getAdminSessionCookieOptions: () => ({
-    httpOnly: true,
-    maxAge: 432000,
-    path: "/",
-    sameSite: "lax" as const,
-    secure: false,
-  }),
-}));
+vi.mock("@/server/auth/admin-session", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/server/auth/admin-session")>();
+  return { ...actual, createAdminSessionCookie: mocks.createAdminSessionCookie };
+});
 
 vi.mock("@/server/observability/log-unexpected-server-error", () => ({
   logUnexpectedServerError: mocks.logUnexpectedServerError,
@@ -69,7 +52,6 @@ function sameOriginRequestWithCookie(): Request {
 describe("administrative session route", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.getBearerToken.mockReturnValue("firebase-id-token");
   });
 
   it("sets only an HttpOnly administrative cookie after a recent authorized login", async () => {
@@ -90,7 +72,7 @@ describe("administrative session route", () => {
     expect(response.headers.get("set-cookie")).toMatch(/SameSite=Lax/i);
   });
 
-  it("does not set a cookie for a non-admin claim", async () => {
+  it("does not set a cookie when the verifier rejects a non-admin claim", async () => {
     mocks.verifyAdminIdToken.mockRejectedValue(
       new AuthorizationError("Acesso administrativo não autorizado.", 403),
     );
@@ -102,7 +84,7 @@ describe("administrative session route", () => {
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 
-  it("does not set a cookie for a missing salon claim", async () => {
+  it("does not set a cookie when the verifier rejects a missing salon claim", async () => {
     mocks.verifyAdminIdToken.mockRejectedValue(
       new AuthorizationError("Acesso administrativo não autorizado.", 403),
     );
@@ -136,10 +118,6 @@ describe("administrative session route", () => {
   });
 
   it("rejects a missing or malformed bearer token without creating a cookie", async () => {
-    mocks.getBearerToken.mockImplementation(() => {
-      throw new AuthorizationError("Token de autenticação ausente.", 401);
-    });
-
     const missingAuthorization = await POST(
       new Request("http://localhost/api/auth/session", {
         method: "POST",
@@ -155,9 +133,16 @@ describe("administrative session route", () => {
 
     expect(missingAuthorization.status).toBe(401);
     expect(malformedAuthorization.status).toBe(401);
+    await expect(missingAuthorization.json()).resolves.toEqual({
+      error: "Token de autenticação ausente.",
+    });
+    await expect(malformedAuthorization.json()).resolves.toEqual({
+      error: "Token de autenticação ausente.",
+    });
     expect(missingAuthorization.headers.get("set-cookie")).toBeNull();
     expect(malformedAuthorization.headers.get("set-cookie")).toBeNull();
     expect(mocks.verifyAdminIdToken).not.toHaveBeenCalled();
+    expect(mocks.createAdminSessionCookie).not.toHaveBeenCalled();
   });
 
   it.each([
