@@ -5,6 +5,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
+import {
+  clearAdminSession,
+  performAdminLogout,
+} from "@/features/admin-auth/admin-session-workflows";
 import { getSessionClientAuth } from "@/features/admin-services/firebase-client";
 
 const LOGOUT_ERROR_MESSAGE = "Não foi possível sair. Tente novamente.";
@@ -22,15 +26,13 @@ export function AdminNavigation() {
     setMessage(undefined);
 
     try {
-      const response = await fetch("/api/auth/session", {
-        credentials: "same-origin",
-        method: "DELETE",
+      const didLogOut = await performAdminLogout({
+        clearSession: clearAdminSession,
+        getAuth: getSessionClientAuth,
+        navigate: (destination) => router.replace(destination),
+        signOutClient: signOut,
       });
-      if (!response.ok) throw new Error(LOGOUT_ERROR_MESSAGE);
-
-      const auth = await getSessionClientAuth();
-      await signOut(auth);
-      router.replace("/login");
+      if (!didLogOut) setMessage(LOGOUT_ERROR_MESSAGE);
     } catch {
       setMessage(LOGOUT_ERROR_MESSAGE);
     } finally {

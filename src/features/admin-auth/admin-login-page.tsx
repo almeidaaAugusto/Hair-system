@@ -10,12 +10,19 @@ import {
   getLoginErrorMessage,
   getSafeAdminDestination,
 } from "@/features/admin-auth/login-destination";
+import {
+  clearAdminSession,
+  finalizeSuccessfulAdminLogin,
+} from "@/features/admin-auth/admin-session-workflows";
 import { getSessionClientAuth } from "@/features/admin-services/firebase-client";
 
 type AdminLoginPageProps = {
   hasStaleSession?: boolean;
   next?: string;
 };
+
+const LOGIN_FINALIZATION_ERROR_MESSAGE = "Não foi possível concluir o login. Tente novamente.";
+const STALE_SESSION_ERROR_MESSAGE = "Não foi possível preparar o login. Tente novamente.";
 
 class SessionExchangeError extends Error {
   constructor(readonly status: number) {
@@ -42,11 +49,10 @@ export function AdminLoginPage({ hasStaleSession = false, next }: AdminLoginPage
     if (!hasStaleSession || hasStartedStaleSessionCleanup.current) return;
     hasStartedStaleSessionCleanup.current = true;
 
-    void fetch("/api/auth/session", {
-      credentials: "same-origin",
-      method: "DELETE",
-    })
-      .catch(() => undefined)
+    void clearAdminSession()
+      .then((wasCleared) => {
+        if (!wasCleared) setMessage(STALE_SESSION_ERROR_MESSAGE);
+      })
       .finally(() => {
         setIsClearingStaleSession(false);
       });
@@ -71,8 +77,15 @@ export function AdminLoginPage({ hasStaleSession = false, next }: AdminLoginPage
 
       if (!response.ok) throw new SessionExchangeError(response.status);
 
-      await signOut(auth);
-      router.replace(getSafeAdminDestination(next));
+      const result = await finalizeSuccessfulAdminLogin({
+        auth,
+        clearSession: clearAdminSession,
+        destination: getSafeAdminDestination(next),
+        hardNavigate: (destination) => window.location.replace(destination),
+        signOutClient: signOut,
+        softNavigate: (destination) => router.replace(destination),
+      });
+      if (result === "rolled-back") setMessage(LOGIN_FINALIZATION_ERROR_MESSAGE);
     } catch (error) {
       if (auth) await signOut(auth).catch(() => undefined);
       setMessage(getLoginErrorMessage(getFirebaseErrorCode(error), getSessionStatus(error)));
