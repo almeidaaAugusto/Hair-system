@@ -8,10 +8,27 @@ describe("getSafeAdminDestination", () => {
     (next) => expect(getSafeAdminDestination(next)).toBe(next),
   );
 
-  it.each([undefined, "https://evil.example", "//evil.example", "/other"])(
-    "falls back safely for %s",
-    (next) => expect(getSafeAdminDestination(next)).toBe("/admin/services"),
+  it.each([
+    undefined,
+    "https://evil.example",
+    "//evil.example",
+    "/other",
+    "/administrator",
+    "/admin/../login",
+    "/admin/%2e%2e/login",
+    "/admin/../../evil.example",
+    "/admin/\\evil.example",
+    "/admin/services\n",
+    "/admin/\tservices",
+  ])("falls back safely for %s", (next) =>
+    expect(getSafeAdminDestination(next)).toBe("/admin/services"),
   );
+
+  it("normalizes an administrative path without allowing it to escape admin", () => {
+    expect(getSafeAdminDestination("/admin/business-hours/../services?tab=active")).toBe(
+      "/admin/services?tab=active",
+    );
+  });
 });
 
 describe("getLoginErrorMessage", () => {

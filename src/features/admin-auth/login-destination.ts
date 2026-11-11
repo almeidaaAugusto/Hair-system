@@ -7,7 +7,23 @@ const INVALID_CREDENTIAL_CODES = new Set([
 ]);
 
 export function getSafeAdminDestination(next: string | undefined): string {
-  return next === "/admin" || next?.startsWith("/admin/") ? next : DEFAULT_ADMIN_DESTINATION;
+  if (
+    !next?.startsWith("/") ||
+    next.startsWith("//") ||
+    next.includes("\\") ||
+    Array.from(next).some(
+      (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+    )
+  ) {
+    return DEFAULT_ADMIN_DESTINATION;
+  }
+
+  const destination = new URL(next, "https://admin.internal");
+  if (destination.pathname !== "/admin" && !destination.pathname.startsWith("/admin/")) {
+    return DEFAULT_ADMIN_DESTINATION;
+  }
+
+  return destination.pathname + destination.search + destination.hash;
 }
 
 export function getLoginErrorMessage(firebaseCode?: string, sessionStatus?: number): string {
