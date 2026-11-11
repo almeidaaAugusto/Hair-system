@@ -79,4 +79,15 @@ describe("administrative page session", () => {
     await expect(requireAdminSession()).rejects.toBe(failure);
     await expect(getOptionalAdminSession()).rejects.toBe(failure);
   });
+
+  it.each(["auth/internal-error", "auth/invalid-credential", "auth/insufficient-permission"])(
+    "preserves the session on provider failure %s without redirecting or rendering stale-cookie login",
+    async (code) => {
+      const failure = Object.assign(new Error("private provider details"), { code });
+      mocks.verifySessionCookie.mockRejectedValue(failure);
+
+      await expect(requireAdminSession()).rejects.toBe(failure);
+      await expect(getOptionalAdminSession()).rejects.toBe(failure);
+    },
+  );
 });

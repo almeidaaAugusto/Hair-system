@@ -28,4 +28,6 @@ await auth.setCustomUserClaims(user.uid, {
   salonId,
 });
 
+await auth.revokeRefreshTokens(user.uid);
+
 console.log("Permissões administrativas configuradas. Entre novamente na aplicação.");

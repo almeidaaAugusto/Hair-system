@@ -4,7 +4,13 @@ const mocks = vi.hoisted(() => ({
   createAdminSessionCookie: vi.fn(),
   logUnexpectedServerError: vi.fn(),
   verifyAdminIdToken: vi.fn(),
+  verifyIdToken: vi.fn(),
 }));
+
+vi.mock("firebase-admin/auth", () => ({
+  getAuth: () => ({ verifyIdToken: mocks.verifyIdToken }),
+}));
+vi.mock("@/server/firebase/admin", () => ({ getAdminApp: vi.fn() }));
 
 vi.mock("@/server/auth/admin-context", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/auth/admin-context")>();
@@ -53,6 +59,90 @@ describe("administrative session route", () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
+
+  it.each([
+    ["POST", POST, 401],
+    ["DELETE", DELETE, 204],
+  ] as const)(
+    "uses the received Host for %s when Next's internal URL has a different hostname",
+    async (method, handler, expectedStatus) => {
+      const response = await handler(
+        new Request("http://localhost:3101/api/auth/session", {
+          method,
+          headers: { Host: "127.0.0.1:3101", Origin: "http://127.0.0.1:3101" },
+        }),
+      );
+
+      expect(response.status).toBe(expectedStatus);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      if (method === "POST") {
+        expect(response.headers.get("set-cookie")).toBeNull();
+        await expect(response.json()).resolves.toEqual({ error: "Token de autenticação ausente." });
+      } else {
+        expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+      }
+    },
+  );
+
+  it.each([
+    ["POST", POST],
+    ["DELETE", DELETE],
+  ] as const)("rejects foreign origins against the actual Host on %s", async (method, handler) => {
+    for (const origin of [
+      "http://localhost:3101",
+      "https://attacker.example",
+      "https://127.0.0.1:3101",
+    ]) {
+      const response = await handler(
+        new Request("http://localhost:3101/api/auth/session", {
+          method,
+          headers: {
+            Host: "127.0.0.1:3101",
+            Origin: origin,
+            Authorization: "Bearer firebase-id-token",
+          },
+        }),
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("set-cookie")).toBeNull();
+      await expect(response.json()).resolves.toEqual({
+        error: "Requisição de sessão não autorizada.",
+      });
+    }
+    expect(mocks.verifyAdminIdToken).not.toHaveBeenCalled();
+    expect(mocks.createAdminSessionCookie).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["POST", POST, 401],
+    ["DELETE", DELETE, 204],
+  ] as const)(
+    "ignores forwarded host headers for the %s same-origin decision",
+    async (method, handler, expectedStatus) => {
+      const headers = new Headers({
+        Host: "127.0.0.1:3101",
+        Origin: "http://127.0.0.1:3101",
+        "X-Forwarded-Host": "attacker.example",
+        "X-Forwarded-Proto": "https",
+        Forwarded: "host=attacker.example;proto=https",
+      });
+      const accepted = await handler(
+        new Request("http://localhost:3101/api/auth/session", { method, headers }),
+      );
+      expect(accepted.status).toBe(expectedStatus);
+      expect(accepted.headers.get("cache-control")).toBe("no-store");
+
+      headers.set("Origin", "https://attacker.example");
+      const rejected = await handler(
+        new Request("http://localhost:3101/api/auth/session", { method, headers }),
+      );
+      expect(rejected.status).toBe(403);
+      expect(rejected.headers.get("set-cookie")).toBeNull();
+      expect(rejected.headers.get("cache-control")).toBe("no-store");
+    },
+  );
 
   it("sets only an HttpOnly administrative cookie after a recent authorized login", async () => {
     mocks.verifyAdminIdToken.mockResolvedValue({
@@ -183,6 +273,31 @@ describe("administrative session route", () => {
       unexpectedError,
     );
   });
+
+  it.each(["auth/internal-error", "auth/invalid-credential", "auth/insufficient-permission"])(
+    "returns a bounded 500 without cookie mutations when the Firebase SDK rejects with %s",
+    async (code) => {
+      const actual = await vi.importActual<typeof import("@/server/auth/admin-context")>(
+        "@/server/auth/admin-context",
+      );
+      mocks.verifyAdminIdToken.mockImplementation(actual.verifyAdminIdToken);
+      const failure = Object.assign(new Error("private provider diagnostics"), { code });
+      mocks.verifyIdToken.mockRejectedValue(failure);
+      const request = sameOriginBearerRequest();
+      request.headers.set("Cookie", "admin_session=existing-valid-session");
+
+      const response = await POST(request);
+
+      expect(response.status).toBe(500);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("set-cookie")).toBeNull();
+      await expect(response.json()).resolves.toEqual({
+        error: "Não foi possível concluir a operação.",
+      });
+      expect(mocks.createAdminSessionCookie).not.toHaveBeenCalled();
+      expect(mocks.logUnexpectedServerError).toHaveBeenCalledWith("/api/auth/session", failure);
+    },
+  );
 
   it("clears the session cookie on same-origin logout even when its value is invalid", async () => {
     const response = await DELETE(sameOriginRequestWithCookie());

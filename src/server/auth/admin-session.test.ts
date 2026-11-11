@@ -36,6 +36,33 @@ describe("admin session", () => {
     vi.unstubAllEnvs();
   });
 
+  it.each(["auth/internal-error", "auth/invalid-credential", "auth/insufficient-permission"])(
+    "propagates Firebase session infrastructure or configuration failure %s",
+    async (code) => {
+      const failure = Object.assign(new Error("private provider details"), { code });
+      mocks.verifySessionCookie.mockRejectedValue(failure);
+
+      await expect(verifyAdminSessionCookie("valid-session")).rejects.toBe(failure);
+    },
+  );
+
+  it.each([
+    "auth/argument-error",
+    "auth/session-cookie-expired",
+    "auth/session-cookie-revoked",
+    "auth/user-disabled",
+    "auth/user-not-found",
+  ])("rejects invalid session credentials %s with a bounded 401", async (code) => {
+    mocks.verifySessionCookie.mockRejectedValue(
+      Object.assign(new Error("private provider details"), { code }),
+    );
+
+    await expect(verifyAdminSessionCookie("invalid-session")).rejects.toMatchObject({
+      message: "Token de autenticação inválido.",
+      status: 401,
+    });
+  });
+
   it("verifies a session cookie with revocation checking", async () => {
     mocks.verifySessionCookie.mockResolvedValue({
       admin: true,

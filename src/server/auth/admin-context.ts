@@ -47,13 +47,26 @@ export function getAdminContext(claims: TokenClaims): AdminContext {
   return { salonId, userId: claims.uid };
 }
 
+// Firebase Admin uses argument-error for malformed JWTs and invalid signatures.
+// Provider/configuration failures must propagate to the server's generic 500 path.
+const invalidFirebaseCredentialCodes = new Set([
+  "auth/argument-error",
+  "auth/invalid-id-token",
+  "auth/id-token-expired",
+  "auth/id-token-revoked",
+  "auth/session-cookie-expired",
+  "auth/session-cookie-revoked",
+  "auth/user-disabled",
+  "auth/user-not-found",
+]);
+
 function isFirebaseTokenError(error: unknown): boolean {
   return (
     typeof error === "object" &&
     error !== null &&
     "code" in error &&
     typeof error.code === "string" &&
-    error.code.startsWith("auth/")
+    invalidFirebaseCredentialCodes.has(error.code)
   );
 }
 

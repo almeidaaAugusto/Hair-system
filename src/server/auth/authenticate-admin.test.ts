@@ -24,6 +24,39 @@ describe("authenticateAdmin", () => {
     vi.resetAllMocks();
   });
 
+  it.each(["auth/internal-error", "auth/invalid-credential", "auth/insufficient-permission"])(
+    "propagates Firebase infrastructure or configuration failure %s without invalidating credentials",
+    async (code) => {
+      const failure = Object.assign(new Error("private provider details"), { code });
+      mocks.verifyIdToken.mockRejectedValue(failure);
+
+      await expect(verifyAdminIdToken("valid-token")).rejects.toBe(failure);
+      await expect(
+        authenticateAdmin(
+          new Request("http://localhost/api/admin/services", {
+            headers: { Authorization: "Bearer valid-token" },
+          }),
+        ),
+      ).rejects.toBe(failure);
+    },
+  );
+
+  it.each([
+    "auth/argument-error",
+    "auth/invalid-id-token",
+    "auth/id-token-expired",
+    "auth/id-token-revoked",
+    "auth/user-disabled",
+    "auth/user-not-found",
+  ])("rejects invalid ID-token credentials %s with a bounded 401", async (code) => {
+    mocks.verifyIdToken.mockRejectedValue(Object.assign(new Error("private details"), { code }));
+
+    await expect(verifyAdminIdToken("invalid-token")).rejects.toMatchObject({
+      message: "Token de autenticação inválido.",
+      status: 401,
+    });
+  });
+
   it("maps an invalid Firebase ID token to a generic 401 authorization error", async () => {
     const invalidTokenError = Object.assign(new Error("token expired"), {
       code: "auth/id-token-expired",

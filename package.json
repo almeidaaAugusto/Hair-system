@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -13,8 +13,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "firebase emulators:exec --project demo-sistema-cabelo --only auth,firestore \"vitest run --config vitest.integration.config.ts\"",
+    "test:integration": "firebase emulators:exec --config firebase.test.json --project demo-sistema-cabelo --only auth,firestore \"vitest run --config vitest.integration.config.ts\"",
     "test:e2e": "playwright test",
+    "test:e2e:auth": "firebase emulators:exec --config firebase.test.json --project demo-sistema-cabelo --only auth,firestore \"playwright test --config playwright.auth.config.ts\"",
     "emulators": "firebase emulators:start --project demo-sistema-cabelo",
     "firebase:set-admin": "node --env-file=.env.local scripts/set-admin-claims.mjs"
   },

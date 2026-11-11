@@ -32,7 +32,10 @@ async function readError(response: Response): Promise<string> {
 export function BusinessHoursAdminPage() {
   const [message, setMessage] = useState<string>();
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const isFormDisabled = !hasLoaded || isLoading || isSaving;
   const businessHoursForm = useForm<BusinessHoursInput>({
     defaultValues: createDefaultBusinessHoursInput(),
   });
@@ -53,7 +56,10 @@ export function BusinessHoursAdminPage() {
         const response = await fetchAdmin("/api/admin/business-hours");
         if (!response.ok) throw new Error(await readError(response));
         const data = (await response.json()) as { businessHours: BusinessHours };
-        if (isMounted) resetBusinessHours(data.businessHours);
+        if (isMounted) {
+          resetBusinessHours(data.businessHours);
+          setHasLoaded(true);
+        }
       } catch (error) {
         if (isMounted) {
           setMessage(
@@ -69,9 +75,11 @@ export function BusinessHoursAdminPage() {
     return () => {
       isMounted = false;
     };
-  }, [resetBusinessHours]);
+  }, [loadAttempt, resetBusinessHours]);
 
   async function submitBusinessHours(input: BusinessHoursInput) {
+    if (isFormDisabled) return;
+
     const validation = businessHoursInputSchema.safeParse(input);
     if (!validation.success) {
       setMessage(validation.error.issues[0]?.message ?? "Revise os horários informados.");
@@ -108,6 +116,11 @@ export function BusinessHoursAdminPage() {
         <h1 id="business-hours-title">Expediente</h1>
         <p>Defina os dias e horários em que a profissional atende.</p>
         {isLoading ? <p role="status">Carregando expediente…</p> : null}
+        {!isLoading && !hasLoaded ? (
+          <button onClick={() => setLoadAttempt((attempt) => attempt + 1)} type="button">
+            Tentar novamente
+          </button>
+        ) : null}
         <form
           aria-busy={isLoading || isSaving}
           onSubmit={businessHoursForm.handleSubmit(submitBusinessHours)}
@@ -123,11 +136,11 @@ export function BusinessHoursAdminPage() {
                 min: 0,
                 valueAsNumber: true,
               })}
-              disabled={isLoading || isSaving}
+              disabled={isFormDisabled}
             />
           </label>
 
-          <fieldset className="business-hours-days" disabled={isLoading || isSaving}>
+          <fieldset className="business-hours-days" disabled={isFormDisabled}>
             <legend>Semana de atendimento</legend>
             {weekdays.map(({ key, label }) => {
               const isOpen = weeklyHours[key].isOpen;
@@ -167,7 +180,7 @@ export function BusinessHoursAdminPage() {
             })}
           </fieldset>
 
-          <button disabled={isLoading || isSaving} type="submit">
+          <button disabled={isFormDisabled} type="submit">
             {isSaving ? "Salvando…" : "Salvar expediente"}
           </button>
         </form>

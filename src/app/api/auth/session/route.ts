@@ -19,7 +19,10 @@ const MAX_AUTH_AGE_SECONDS = 5 * 60;
 
 function assertSameOrigin(request: Request): void {
   const origin = request.headers.get("origin");
-  if (!origin || origin !== new URL(request.url).origin) {
+  const requestUrl = new URL(request.url);
+  const host = request.headers.get("host");
+  const expectedOrigin = host ? `${requestUrl.protocol}//${host}` : requestUrl.origin;
+  if (!origin || origin !== expectedOrigin) {
     throw new AuthorizationError("Requisição de sessão não autorizada.", 403);
   }
 }
