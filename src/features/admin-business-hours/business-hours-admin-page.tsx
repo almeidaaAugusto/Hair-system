@@ -31,7 +31,8 @@ async function readError(response: Response): Promise<string> {
 
 export function BusinessHoursAdminPage() {
   const [message, setMessage] = useState<string>();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const businessHoursForm = useForm<BusinessHoursInput>({
     defaultValues: createDefaultBusinessHoursInput(),
   });
@@ -77,7 +78,7 @@ export function BusinessHoursAdminPage() {
       return;
     }
 
-    setIsLoading(true);
+    setIsSaving(true);
     setMessage(undefined);
 
     try {
@@ -96,7 +97,7 @@ export function BusinessHoursAdminPage() {
         error instanceof Error ? error.message : "Não foi possível atualizar o expediente.",
       );
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   }
 
@@ -106,7 +107,11 @@ export function BusinessHoursAdminPage() {
         <AdminNavigation />
         <h1 id="business-hours-title">Expediente</h1>
         <p>Defina os dias e horários em que a profissional atende.</p>
-        <form onSubmit={businessHoursForm.handleSubmit(submitBusinessHours)}>
+        {isLoading ? <p role="status">Carregando expediente…</p> : null}
+        <form
+          aria-busy={isLoading || isSaving}
+          onSubmit={businessHoursForm.handleSubmit(submitBusinessHours)}
+        >
           <label>
             Intervalo entre atendimentos (minutos)
             <input
@@ -118,10 +123,11 @@ export function BusinessHoursAdminPage() {
                 min: 0,
                 valueAsNumber: true,
               })}
+              disabled={isLoading || isSaving}
             />
           </label>
 
-          <fieldset className="business-hours-days">
+          <fieldset className="business-hours-days" disabled={isLoading || isSaving}>
             <legend>Semana de atendimento</legend>
             {weekdays.map(({ key, label }) => {
               const isOpen = weeklyHours[key].isOpen;
@@ -161,8 +167,8 @@ export function BusinessHoursAdminPage() {
             })}
           </fieldset>
 
-          <button disabled={isLoading} type="submit">
-            {isLoading ? "Salvando…" : "Salvar expediente"}
+          <button disabled={isLoading || isSaving} type="submit">
+            {isSaving ? "Salvando…" : "Salvar expediente"}
           </button>
         </form>
         {message ? <p role="status">{message}</p> : null}

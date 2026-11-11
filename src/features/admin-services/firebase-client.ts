@@ -50,6 +50,9 @@ async function configureSessionClientAuth(): Promise<Auth> {
 }
 
 export function getSessionClientAuth(): Promise<Auth> {
-  sessionAuthPromise ??= configureSessionClientAuth();
+  sessionAuthPromise ??= configureSessionClientAuth().catch((error: unknown) => {
+    sessionAuthPromise = undefined;
+    throw error;
+  });
   return sessionAuthPromise;
 }

@@ -126,7 +126,7 @@ export function ServicesAdminPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [message, setMessage] = useState<string>();
   const [editingService, setEditingService] = useState<Service>();
-  const [isLoadingServices, setIsLoadingServices] = useState(false);
+  const [isLoadingServices, setIsLoadingServices] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [restoreFocusId, setRestoreFocusId] = useState<string>();
@@ -258,7 +258,12 @@ export function ServicesAdminPage() {
             <p>Organize duração, preço e disponibilidade do seu atendimento.</p>
           </div>
           {!formIsVisible ? (
-            <button id="new-service" onClick={() => startCreating("new-service")} type="button">
+            <button
+              id="new-service"
+              disabled={isLoadingServices}
+              onClick={() => startCreating("new-service")}
+              type="button"
+            >
               Novo serviço
             </button>
           ) : null}

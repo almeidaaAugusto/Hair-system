@@ -29,6 +29,7 @@ describe("administrative page initial loading", () => {
     expect(html).toContain("Carregando expediente…");
     expect(html).toContain("Salvar expediente");
     expect(html).not.toContain("Salvando…");
-    expect(html).toMatch(/name="appointmentIntervalMinutes"[^>]*disabled=""/);
+    const intervalInput = html.match(/<input\b[^>]*name="appointmentIntervalMinutes"[^>]*>/)?.[0];
+    expect(intervalInput).toContain('disabled=""');
   });
 });
