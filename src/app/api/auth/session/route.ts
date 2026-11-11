@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { AuthorizationError, getBearerToken, verifyAdminIdToken } from "@/server/auth/admin-context";
+import {
+  AuthorizationError,
+  getBearerToken,
+  verifyAdminIdToken,
+} from "@/server/auth/admin-context";
 import {
   ADMIN_SESSION_COOKIE_NAME,
   createAdminSessionCookie,
@@ -22,11 +26,17 @@ function assertSameOrigin(request: Request): void {
 
 function errorResponse(error: unknown): Response {
   if (error instanceof AuthorizationError) {
-    return Response.json({ error: error.message }, { status: error.status });
+    return Response.json(
+      { error: error.message },
+      { status: error.status, headers: { "Cache-Control": "no-store" } },
+    );
   }
 
   logUnexpectedServerError("/api/auth/session", error);
-  return Response.json({ error: "Não foi possível concluir a operação." }, { status: 500 });
+  return Response.json(
+    { error: "Não foi possível concluir a operação." },
+    { status: 500, headers: { "Cache-Control": "no-store" } },
+  );
 }
 
 function noStoreResponse(): NextResponse {

@@ -114,6 +114,26 @@ describe("authenticateAdmin", () => {
     expect(mocks.verifySessionCookie).toHaveBeenCalledWith("session=value", true);
   });
 
+  it.each(["", " ", "Basic invalid-token"])(
+    "rejects an explicitly malformed authorization header %j without cookie fallback",
+    async (authorization) => {
+      mocks.verifySessionCookie.mockResolvedValue({
+        admin: true,
+        salonId: "salon-1",
+        uid: "user-1",
+      });
+
+      await expect(
+        authenticateAdmin(
+          new Request("http://localhost/api/admin/services", {
+            headers: { Authorization: authorization, Cookie: "admin_session=valid-session" },
+          }),
+        ),
+      ).rejects.toMatchObject({ status: 401 });
+      expect(mocks.verifySessionCookie).not.toHaveBeenCalled();
+    },
+  );
+
   it("rejects requests without a bearer token or session cookie", async () => {
     await expect(
       authenticateAdmin(new Request("http://localhost/api/admin/services")),

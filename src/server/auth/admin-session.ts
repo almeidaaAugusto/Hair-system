@@ -42,6 +42,7 @@ export function getAdminSessionCookieOptions() {
     httpOnly: true,
     maxAge: ADMIN_SESSION_MAX_AGE_SECONDS,
     path: "/",
+    priority: "high" as const,
     sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
   };

@@ -83,7 +83,7 @@ export async function verifyAdminIdToken(
 
 export async function authenticateAdmin(request: Request): Promise<AdminContext> {
   const authorization = request.headers.get("authorization");
-  if (authorization) {
+  if (authorization !== null) {
     return (await verifyAdminIdToken(getBearerToken(authorization))).admin;
   }
 

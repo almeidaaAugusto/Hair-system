@@ -116,6 +116,7 @@ describe("admin session", () => {
       httpOnly: true,
       maxAge: ADMIN_SESSION_MAX_AGE_SECONDS,
       path: "/",
+      priority: "high",
       sameSite: "lax",
       secure: false,
     });

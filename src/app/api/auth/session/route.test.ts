@@ -80,7 +80,9 @@ describe("administrative session route", () => {
     const response = await POST(sameOriginBearerRequest());
 
     expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({ error: "Acesso administrativo não autorizado." });
+    await expect(response.json()).resolves.toEqual({
+      error: "Acesso administrativo não autorizado.",
+    });
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 
@@ -157,7 +159,9 @@ describe("administrative session route", () => {
     );
 
     expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({ error: "Requisição de sessão não autorizada." });
+    await expect(response.json()).resolves.toEqual({
+      error: "Requisição de sessão não autorizada.",
+    });
     expect(response.headers.get("set-cookie")).toBeNull();
     expect(mocks.verifyAdminIdToken).not.toHaveBeenCalled();
   });
@@ -169,9 +173,15 @@ describe("administrative session route", () => {
     const response = await POST(sameOriginBearerRequest());
 
     expect(response.status).toBe(500);
-    await expect(response.json()).resolves.toEqual({ error: "Não foi possível concluir a operação." });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      error: "Não foi possível concluir a operação.",
+    });
     expect(response.headers.get("set-cookie")).toBeNull();
-    expect(mocks.logUnexpectedServerError).toHaveBeenCalledWith("/api/auth/session", unexpectedError);
+    expect(mocks.logUnexpectedServerError).toHaveBeenCalledWith(
+      "/api/auth/session",
+      unexpectedError,
+    );
   });
 
   it("clears the session cookie on same-origin logout even when its value is invalid", async () => {
@@ -199,5 +209,6 @@ describe("administrative session route", () => {
 
     expect(response.status).toBe(403);
     expect(response.headers.get("set-cookie")).toBeNull();
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 });
