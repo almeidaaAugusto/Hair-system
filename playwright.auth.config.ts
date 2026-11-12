@@ -13,7 +13,7 @@ const firestoreEmulatorHost = localEmulatorHost("FIRESTORE_EMULATOR_HOST", 8085)
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testMatch: "admin-auth.spec.ts",
+  testMatch: ["admin-auth.spec.ts", "admin-agenda.spec.ts"],
   fullyParallel: false,
   maxFailures: 1,
   workers: 1,

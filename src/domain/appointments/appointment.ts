@@ -52,7 +52,31 @@ export const createTimeBlockInputSchema = z
   .strict();
 
 export const dayQuerySchema = z.object({ date: localDateSchema }).strict();
-export const availabilityQuerySchema = dayQuerySchema.extend({ serviceId: documentIdSchema });
+export const MAX_AGENDA_RANGE_DAYS = 42;
+export function countLocalDays(from: string, to: string): number {
+  return (
+    Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1
+  );
+}
+export const rangeQuerySchema = z
+  .object({ from: localDateSchema, to: localDateSchema })
+  .strict()
+  .refine(
+    ({ from, to }) => from <= to && countLocalDays(from, to) <= MAX_AGENDA_RANGE_DAYS,
+    `O período deve ter de 1 a ${MAX_AGENDA_RANGE_DAYS} dias.`,
+  );
+export const agendaQuerySchema = z.union([dayQuerySchema, rangeQuerySchema]);
+export const availabilityQuerySchema = dayQuerySchema.extend({
+  serviceId: documentIdSchema,
+  /** Ignores this appointment's own period, so it can be moved within the day. */
+  excludeAppointmentId: documentIdSchema.optional(),
+});
+
+/** Without serviceId the original service snapshot is kept. */
+export const rescheduleInputSchema = z
+  .object({ startAt: utcMinuteSchema, serviceId: documentIdSchema.optional() })
+  .strict();
+export type RescheduleInput = z.infer<typeof rescheduleInputSchema>;
 
 export type CreateAppointmentInput = z.infer<typeof createAppointmentInputSchema>;
 export type CreateTimeBlockInput = z.infer<typeof createTimeBlockInputSchema>;
@@ -71,11 +95,45 @@ const recordShape = {
   cancelledAt: utcInstantSchema.optional(),
 };
 
+export const MAX_PAYMENT_CENTS = 10_000_000;
+export const paymentMethods = ["pix", "cash", "debit", "credit"] as const;
+export const paymentMethodSchema = z.enum(paymentMethods);
+const centsSchema = z.number().int().min(0).max(MAX_PAYMENT_CENTS);
+
+/** Final value, amount paid and the method used; the balance is always derived. */
+export const paymentSchema = z
+  .object({
+    finalPriceCents: centsSchema,
+    paidCents: centsSchema,
+    method: paymentMethodSchema.optional(),
+  })
+  .strict()
+  .refine((payment) => payment.paidCents <= payment.finalPriceCents, {
+    message: "O valor pago não pode ser maior que o valor final.",
+    path: ["paidCents"],
+  })
+  .refine((payment) => payment.paidCents === 0 || payment.method !== undefined, {
+    message: "Informe a forma de pagamento.",
+    path: ["method"],
+  });
+
+export const completeAppointmentInputSchema = z
+  .object({ payment: paymentSchema.optional() })
+  .strict();
+
+export const appointmentStatuses = ["confirmed", "completed", "no_show", "cancelled"] as const;
+
 export const appointmentSchema = z
   .object({
     ...recordShape,
     occupiedUntilAt: utcMinuteSchema,
-    status: z.enum(["confirmed", "cancelled"]),
+    status: z.enum(appointmentStatuses),
+    completedAt: utcInstantSchema.optional(),
+    noShowAt: utcInstantSchema.optional(),
+    payment: paymentSchema.optional(),
+    paymentUpdatedAt: utcInstantSchema.optional(),
+    reminderSentAt: utcInstantSchema.optional(),
+    clientConfirmedAt: utcInstantSchema.optional(),
     client: clientSchema,
     serviceSnapshot: createServiceSchema
       .omit({ isActive: true })
@@ -91,6 +149,15 @@ export const appointmentSchema = z
       (Date.parse(appointment.occupiedUntilAt) - Date.parse(appointment.endAt)) / 60_000 ===
         appointment.appointmentIntervalMinutes,
     "Os horários devem corresponder à duração e ao intervalo registrados.",
+  )
+  .refine(
+    (appointment) =>
+      (appointment.status === "completed") === (appointment.completedAt !== undefined) &&
+      (appointment.status === "no_show") === (appointment.noShowAt !== undefined) &&
+      (appointment.status === "cancelled") === (appointment.cancelledAt !== undefined) &&
+      (appointment.payment === undefined || appointment.status === "completed") &&
+      (appointment.payment === undefined) === (appointment.paymentUpdatedAt === undefined),
+    "O estado do atendimento não corresponde aos registros de conclusão, falta ou pagamento.",
   );
 
 export const timeBlockSchema = z
@@ -107,13 +174,19 @@ export const timeBlockSchema = z
 
 export type Appointment = z.infer<typeof appointmentSchema>;
 export type TimeBlock = z.infer<typeof timeBlockSchema>;
+export type AppointmentStatus = Appointment["status"];
+export type Payment = z.infer<typeof paymentSchema>;
+export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
+export type CompleteAppointmentInput = z.infer<typeof completeAppointmentInputSchema>;
 export type AppointmentRuleErrorCode =
   | "NOT_FOUND"
   | "SERVICE_UNAVAILABLE"
   | "OUTSIDE_BUSINESS_HOURS"
   | "CONFLICT"
   | "IDEMPOTENCY_CONFLICT"
-  | "INVALID_TIME_RANGE";
+  | "INVALID_TIME_RANGE"
+  | "INVALID_TRANSITION"
+  | "NOT_STARTED";
 
 export class AppointmentRuleError extends Error {
   constructor(

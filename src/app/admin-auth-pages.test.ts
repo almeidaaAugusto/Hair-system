@@ -56,18 +56,18 @@ describe("administrative server pages", () => {
     expect((await BusinessHoursPage()).type).toBe(BusinessHoursAdminPage);
   });
 
-  it("redirects the administrative root to services after successful verification", async () => {
+  it("redirects the administrative root to the agenda after successful verification", async () => {
     mocks.cookie = "valid-session";
     await expect(AdminPage()).rejects.toMatchObject({
-      digest: "NEXT_REDIRECT;replace;/admin/services;307;",
+      digest: "NEXT_REDIRECT;replace;/admin/agenda;307;",
     });
   });
 
-  it("redirects an already authorized login visitor to services", async () => {
+  it("redirects an already authorized login visitor to the agenda", async () => {
     mocks.cookie = "valid-session";
     await expect(
       LoginPage({ searchParams: Promise.resolve({ next: "/admin/business-hours" }) }),
-    ).rejects.toMatchObject({ digest: "NEXT_REDIRECT;replace;/admin/services;307;" });
+    ).rejects.toMatchObject({ digest: "NEXT_REDIRECT;replace;/admin/agenda;307;" });
   });
 
   it("renders login with a safe return destination when there is no session", async () => {
@@ -88,7 +88,7 @@ describe("administrative server pages", () => {
     );
     const page = await LoginPage({ searchParams: Promise.resolve({}) });
     expect(page.type).toBe(AdminLoginPage);
-    expect(page.props).toMatchObject({ hasStaleSession: true, next: "/admin/services" });
+    expect(page.props).toMatchObject({ hasStaleSession: true, next: "/admin/agenda" });
   });
 
   it.each([
@@ -98,6 +98,6 @@ describe("administrative server pages", () => {
     ["/admin/services", "https://evil.example"],
   ])("defaults an unsafe or ambiguous return destination %j", async (next) => {
     const page = await LoginPage({ searchParams: Promise.resolve({ next }) });
-    expect(page.props.next).toBe("/admin/services");
+    expect(page.props.next).toBe("/admin/agenda");
   });
 });

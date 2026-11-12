@@ -21,7 +21,7 @@ describe("getSafeAdminDestination", () => {
     "/admin/services\n",
     "/admin/\tservices",
   ])("falls back safely for %s", (next) =>
-    expect(getSafeAdminDestination(next)).toBe("/admin/services"),
+    expect(getSafeAdminDestination(next)).toBe("/admin/agenda"),
   );
 
   it("normalizes an administrative path without allowing it to escape admin", () => {

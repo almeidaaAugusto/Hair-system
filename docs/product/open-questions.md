@@ -12,21 +12,22 @@
 
 5. Há exceções ao expediente normal — feriados, folgas, férias ou jornadas diferentes por dia — e como devem ser cadastradas?
 6. Como uma futura interface poderá organizar períodos de férias e outros bloqueios de vários dias?
-7. Alterar serviço ou horário pode mudar o preço e a duração já informados à cliente? Como registrar a justificativa e a versão anterior?
-8. Como tratar faltas: cobrar, manter saldo em aberto, enviar mensagem e/ou liberar um reagendamento?
+7. Alterar serviço ou horário pode mudar o preço e a duração já informados à cliente? Como registrar a justificativa e a versão anterior? (Hoje: reagendar mantém o snapshot; trocar o serviço tira um novo snapshot; a versão anterior não é guardada.)
+8. Como tratar faltas: cobrar, manter saldo em aberto, enviar mensagem e/ou liberar um reagendamento? (Hoje a falta só fica registrada no histórico, sem valor e sem reagendamento automático.)
 
 ### Financeiro e comunicação
 
-9. O pagamento pode ser parcial ou dividido entre formas de pagamento?
-10. O valor final de serviços variáveis é conhecido na confirmação, no atendimento ou depois? Quem o atualiza?
-11. Quais dados devem constar no endereço e nas orientações de cada serviço?
-12. Qual solução de WhatsApp será usada, quem aprova as mensagens e como será registrado consentimento e entrega?
+9. O pagamento pode ser dividido entre formas de pagamento? Sinais antes do atendimento entram no recebido? (Hoje: pagamento parcial é aceito com uma única forma e só após a conclusão.)
+10. ~~O valor final de serviços variáveis é conhecido na confirmação, no atendimento ou depois?~~ Resolvido pelos requisitos: a profissional registra o valor final ao concluir ou depois, partindo do preço inicial do snapshot.
+11. Concluído ou falta marcados por engano precisam poder ser desfeitos? Hoje são finais.
+12. Quais dados devem constar no endereço e nas orientações de cada serviço? (Hoje as mensagens não incluem endereço nem orientações; a profissional pode completar o texto antes de enviar.)
+13. Qual solução de WhatsApp será usada, quem aprova as mensagens e como será registrado consentimento e entrega?
 
 ### Segurança e operação
 
-13. Qual conta administrativa será autorizada no Firebase Authentication e haverá mais de uma administradora no futuro?
-14. Quais são os requisitos de retenção e exclusão de dados pessoais, fotos e histórico químico?
-15. Quais relatórios precisam de exportação ou fechamento mensal?
+14. Qual conta administrativa será autorizada no Firebase Authentication e haverá mais de uma administradora no futuro?
+15. Quais são os requisitos de retenção e exclusão de dados pessoais, fotos e histórico químico?
+16. Quais relatórios precisam de exportação ou fechamento mensal?
 
 ## Requisitos confirmados que restringem as decisões
 
@@ -50,4 +51,4 @@
 
 ## Decisões confirmadas pelos documentos de requisitos
 
-Não há antecedência mínima ou máxima artificial. A profissional efetiva cancelamentos. Bloqueios são manuais e simples, inclusive de dia inteiro; recorrência e férias não fazem parte deste marco. Cadastro separado de clientes e interface da agenda ficam para entregas futuras.
+Não há antecedência mínima ou máxima artificial. A profissional efetiva cancelamentos. Bloqueios são manuais e simples, inclusive de dia inteiro; recorrência e férias não fazem parte deste marco. Cadastro separado de clientes fica para entregas futuras. A interface administrativa da agenda (dia, semana, mês, criação manual, bloqueio e cancelamento) foi entregue em 2026-11-12; serviços que exigem avaliação continuam sem agendamento confirmado, inclusive pelo painel.

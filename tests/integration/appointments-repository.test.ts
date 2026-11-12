@@ -223,6 +223,46 @@ describe("Firestore appointments transactions", { timeout: 30_000 }, () => {
     expect(trace.writes).toBe(0);
   });
 
+  it("reads an inclusive local-date range ordered by day and start, scoped by salon", async () => {
+    const { repository } = instrument();
+    const otherSalon = `integration-${randomUUID()}`;
+    salons.push(otherSalon);
+    const otherService = `service-${randomUUID()}`;
+    await firestore.collection("services").doc(otherService).set({
+      salonId: otherSalon,
+      name: "Outro",
+      durationMinutes: 30,
+      startingPriceCents: 1000,
+      hasVariablePrice: false,
+      requiresEvaluation: false,
+      isActive: true,
+    });
+    await repository.reserve(salonId, "admin", input({ startAt: "2026-11-17T12:00:00.000Z" }));
+    await repository.reserve(salonId, "admin", input({ startAt: "2026-11-16T15:00:00.000Z" }));
+    await repository.reserve(salonId, "admin", input());
+    await repository.createBlock(
+      salonId,
+      "admin",
+      block({ startAt: "2026-11-18T12:00:00.000Z", endAt: "2026-11-18T13:00:00.000Z" }),
+    );
+    await repository.reserve(otherSalon, "admin", input({ serviceId: otherService }));
+
+    const twoDays = await repository.getRange(salonId, "2026-11-16", "2026-11-17");
+    expect(twoDays).toMatchObject({ from: "2026-11-16", to: "2026-11-17" });
+    expect(twoDays.appointments.map((record) => record.startAt)).toEqual([
+      "2026-11-16T12:00:00.000Z",
+      "2026-11-16T15:00:00.000Z",
+      "2026-11-17T12:00:00.000Z",
+    ]);
+    expect(twoDays.timeBlocks).toEqual([]);
+    const withBlock = await repository.getRange(salonId, "2026-11-16", "2026-11-18");
+    expect(withBlock.timeBlocks.map((record) => record.localDate)).toEqual(["2026-11-18"]);
+    expect(
+      (await repository.getRange(otherSalon, "2026-11-16", "2026-11-18")).appointments,
+    ).toHaveLength(1);
+    await expect(repository.getRange(salonId, "2026-11-18", "2026-11-16")).rejects.toThrow();
+  });
+
   it("allows exactly one competing reservation on the first empty day", async () => {
     expect(await count("appointmentDayLocks")).toBe(0);
     const [a, b] = pair();
@@ -599,4 +639,237 @@ describe("Firestore appointments transactions", { timeout: 30_000 }, () => {
       await reference.set(original);
     },
   );
+});
+
+describe("Firestore attendance and payment commands", { timeout: 30_000 }, () => {
+  const pastStart = "2026-11-09T12:00:00.000Z";
+  const futureStart = "2099-11-16T12:00:00.000Z";
+  const paid = { finalPriceCents: 9500, paidCents: 9500, method: "pix" as const };
+
+  it("completes with payment, stores UTC Timestamps and keeps the snapshot", async () => {
+    const { repository } = instrument();
+    const { appointment } = await repository.reserve(
+      salonId,
+      "admin",
+      input({ startAt: pastStart }),
+    );
+    const completed = await repository.complete(salonId, "closer", appointment.id, {
+      payment: paid,
+    });
+    expect(completed).toMatchObject({ status: "completed", payment: paid, updatedBy: "closer" });
+    const stored = (await firestore.collection("appointments").doc(appointment.id).get()).data()!;
+    expect(stored.completedAt).toBeInstanceOf(Timestamp);
+    expect(stored.paymentUpdatedAt).toBeInstanceOf(Timestamp);
+    expect(stored.serviceSnapshot).toEqual(appointment.serviceSnapshot);
+    expect(stored.fingerprint).toEqual(expect.any(String));
+    const [day] = (await repository.getRange(salonId, "2026-11-09", "2026-11-09")).appointments;
+    expect(day).toEqual(completed);
+    // Repeating completion is idempotent and does not touch the stored record.
+    expect(await repository.complete(salonId, "other", appointment.id, {})).toEqual(completed);
+  });
+
+  it("records partial payments later and corrects them", async () => {
+    const { repository } = instrument();
+    const { appointment } = await repository.reserve(
+      salonId,
+      "admin",
+      input({ startAt: pastStart }),
+    );
+    await expect(
+      repository.recordPayment(salonId, "admin", appointment.id, paid),
+    ).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
+    await repository.complete(salonId, "admin", appointment.id, {});
+    const partial = await repository.recordPayment(salonId, "admin", appointment.id, {
+      finalPriceCents: 9500,
+      paidCents: 4000,
+      method: "cash",
+    });
+    expect(partial.payment).toEqual({ finalPriceCents: 9500, paidCents: 4000, method: "cash" });
+    const settled = await repository.recordPayment(salonId, "admin", appointment.id, paid);
+    expect(settled.payment).toEqual(paid);
+  });
+
+  it("marks no-show, keeps the period occupied and refuses cancellation afterwards", async () => {
+    const { repository } = instrument();
+    const { appointment } = await repository.reserve(
+      salonId,
+      "admin",
+      input({ startAt: pastStart }),
+    );
+    const noShow = await repository.markNoShow(salonId, "admin", appointment.id);
+    expect(noShow).toMatchObject({ status: "no_show", noShowAt: expect.any(String) });
+    await expect(repository.cancel(salonId, "admin", appointment.id)).rejects.toMatchObject({
+      code: "INVALID_TRANSITION",
+    });
+    await expect(repository.complete(salonId, "admin", appointment.id, {})).rejects.toMatchObject({
+      code: "INVALID_TRANSITION",
+    });
+    await expect(
+      repository.reserve(salonId, "admin", input({ startAt: pastStart })),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("refuses to finish an appointment that has not started", async () => {
+    const { repository } = instrument();
+    const { appointment } = await repository.reserve(
+      salonId,
+      "admin",
+      input({ startAt: futureStart }),
+    );
+    for (const action of [
+      () => repository.complete(salonId, "admin", appointment.id, {}),
+      () => repository.markNoShow(salonId, "admin", appointment.id),
+    ])
+      await expect(action()).rejects.toMatchObject({ code: "NOT_STARTED" });
+    expect(
+      (await firestore.collection("appointments").doc(appointment.id).get()).get("status"),
+    ).toBe("confirmed");
+  });
+
+  it("hides appointments of other salons and unknown ids", async () => {
+    const { repository } = instrument();
+    const { appointment } = await repository.reserve(
+      salonId,
+      "admin",
+      input({ startAt: pastStart }),
+    );
+    for (const action of [
+      () => repository.complete("another-salon", "admin", appointment.id, {}),
+      () => repository.markNoShow(salonId, "admin", "missing"),
+      () => repository.recordPayment("another-salon", "admin", appointment.id, paid),
+    ])
+      await expect(action()).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("lets exactly one of a concurrent completion and cancellation win", async () => {
+    const [a, b] = pair();
+    const { appointment } = await instrument().repository.reserve(
+      salonId,
+      "admin",
+      input({ startAt: pastStart }),
+    );
+    const results = await Promise.allSettled([
+      a.repository.complete(salonId, "admin", appointment.id, { payment: paid }),
+      b.repository.cancel(salonId, "admin", appointment.id),
+    ]);
+    const stored = (await firestore.collection("appointments").doc(appointment.id).get()).data()!;
+    const fulfilled = results.filter((result) => result.status === "fulfilled");
+    expect(fulfilled).toHaveLength(1);
+    expect(["completed", "cancelled"]).toContain(stored.status);
+    const rejected = results.find((result) => result.status === "rejected");
+    expect((rejected as PromiseRejectedResult).reason.code).toBe("INVALID_TRANSITION");
+    if (stored.status === "completed") expect(stored.cancelledAt).toBeUndefined();
+    else expect(stored.completedAt).toBeUndefined();
+  });
+});
+
+describe("Firestore reschedule, reminder and client confirmation", { timeout: 30_000 }, () => {
+  const monday = "2099-11-16T12:00:00.000Z";
+  const tuesday = "2099-11-17T12:00:00.000Z";
+
+  it("moves to another day, locking both days and freeing the original slot", async () => {
+    const setup = instrument();
+    const { appointment } = await setup.repository.reserve(
+      salonId,
+      "admin",
+      input({ startAt: monday }),
+    );
+    const { repository, trace } = instrument();
+    const moved = await repository.reschedule(salonId, "mover", appointment.id, {
+      startAt: tuesday,
+    });
+    expect(moved).toMatchObject({
+      id: appointment.id,
+      localDate: "2099-11-17",
+      startAt: tuesday,
+      serviceSnapshot: appointment.serviceSnapshot,
+      updatedBy: "mover",
+    });
+    const reads = trace.attempts[0];
+    expect(reads.slice(0, 2).every((event) => event.startsWith("read:appointmentDayLocks/"))).toBe(
+      true,
+    );
+    expect(trace.writes).toBe(3);
+    const stored = (await firestore.collection("appointments").doc(appointment.id).get()).data()!;
+    expect(stored.startAt).toBeInstanceOf(Timestamp);
+    expect(stored.localDate).toBe("2099-11-17");
+    // The Monday slot is free again for a new reservation.
+    await expect(
+      repository.reserve(salonId, "admin", input({ startAt: monday })),
+    ).resolves.toMatchObject({ replayed: false });
+    expect(
+      (await repository.getRange(salonId, "2099-11-16", "2099-11-17")).appointments.map(
+        (record) => record.localDate,
+      ),
+    ).toEqual(["2099-11-16", "2099-11-17"]);
+  });
+
+  it("changes the service with a fresh snapshot and rejects an occupied target", async () => {
+    const { repository } = instrument();
+    const colorId = `service-${randomUUID()}`;
+    await firestore.collection("services").doc(colorId).set({
+      salonId,
+      name: "Coloração",
+      durationMinutes: 120,
+      startingPriceCents: 20000,
+      hasVariablePrice: true,
+      requiresEvaluation: false,
+      isActive: true,
+    });
+    const first = await repository.reserve(salonId, "admin", input({ startAt: monday }));
+    const second = await repository.reserve(
+      salonId,
+      "admin",
+      input({ startAt: "2099-11-16T15:00:00.000Z" }),
+    );
+    // 10:00 local overlaps the first appointment, occupied 09:00–10:10 with its interval.
+    await expect(
+      repository.reschedule(salonId, "admin", second.appointment.id, {
+        startAt: "2099-11-16T13:00:00.000Z",
+        serviceId: colorId,
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    const changed = await repository.reschedule(salonId, "admin", first.appointment.id, {
+      startAt: monday,
+      serviceId: colorId,
+    });
+    expect(changed.serviceSnapshot).toMatchObject({ serviceId: colorId, durationMinutes: 120 });
+    expect(changed.occupiedUntilAt).toBe("2099-11-16T14:10:00.000Z");
+  });
+
+  it("lets only one of a reschedule and a reservation take the same free slot", async () => {
+    const { appointment } = await instrument().repository.reserve(
+      salonId,
+      "admin",
+      input({ startAt: monday }),
+    );
+    const [a, b] = pair();
+    const results = await Promise.allSettled([
+      a.repository.reschedule(salonId, "admin", appointment.id, { startAt: tuesday }),
+      b.repository.reserve(salonId, "admin", input({ startAt: tuesday })),
+    ]);
+    expect(summary(results)).toEqual(["CONFLICT", "ok"]);
+    const tuesdayAppointments = (await instrument().repository.getDay(salonId, "2099-11-17"))
+      .appointments;
+    expect(tuesdayAppointments).toHaveLength(1);
+  });
+
+  it("records the reminder once and clears it from storage after a time change", async () => {
+    const { repository } = instrument();
+    const { appointment } = await repository.reserve(salonId, "admin", input({ startAt: monday }));
+    const reminded = await repository.markReminderSent(salonId, "admin", appointment.id);
+    const again = await repository.markReminderSent(salonId, "other", appointment.id);
+    expect(again.reminderSentAt).toBe(reminded.reminderSentAt);
+    expect(again.updatedBy).toBe("admin");
+    const confirmed = await repository.markClientConfirmed(salonId, "admin", appointment.id);
+    expect(confirmed.clientConfirmedAt).toEqual(expect.any(String));
+    await repository.reschedule(salonId, "admin", appointment.id, { startAt: tuesday });
+    const stored = (await firestore.collection("appointments").doc(appointment.id).get()).data()!;
+    expect(stored).not.toHaveProperty("reminderSentAt");
+    expect(stored).not.toHaveProperty("clientConfirmedAt");
+    await repository.cancel(salonId, "admin", appointment.id);
+    await expect(
+      repository.markReminderSent(salonId, "admin", appointment.id),
+    ).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
+  });
 });

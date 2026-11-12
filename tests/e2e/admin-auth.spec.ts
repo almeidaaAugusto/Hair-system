@@ -60,9 +60,9 @@ async function submitLogin(page: Page, email = accounts.admin, loginPassword = p
 
 async function loginAsAdmin(page: Page) {
   await page.goto("/login");
-  await Promise.all([page.waitForURL("**/admin/services"), submitLogin(page)]);
-  await expect(page).toHaveURL(/\/admin\/services$/);
-  await expect(page.getByRole("heading", { name: "Serviços", exact: true })).toBeVisible();
+  await Promise.all([page.waitForURL("**/admin/agenda"), submitLogin(page)]);
+  await expect(page).toHaveURL(/\/admin\/agenda$/);
+  await expect(page.getByRole("heading", { name: "Agenda", exact: true })).toBeVisible();
 }
 
 test("persists the same five-day session across navigation and refresh", async ({
@@ -131,7 +131,7 @@ for (const path of ["/admin", "/admin/services", "/admin/business-hours"]) {
   test(`allows authenticated direct access to ${path}`, async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(path);
-    const destination = path === "/admin" ? "/admin/services" : path;
+    const destination = path === "/admin" ? "/admin/agenda" : path;
     await expect(page).toHaveURL((url) => url.pathname === destination);
     await expect(page.getByRole("button", { name: "Sair", exact: true })).toBeVisible();
   });
@@ -151,14 +151,14 @@ for (const next of ["https://example.test/steal", "//example.test/steal"]) {
   test(`rejects the external return destination ${next}`, async ({ page }) => {
     await page.goto(`/login?next=${encodeURIComponent(next)}`);
     await submitLogin(page);
-    await expect(page).toHaveURL("http://127.0.0.1:3101/admin/services");
+    await expect(page).toHaveURL("http://127.0.0.1:3101/admin/agenda");
   });
 }
 
-test("redirects an already authorized visitor from login to services", async ({ page }) => {
+test("redirects an already authorized visitor from login to the agenda", async ({ page }) => {
   await loginAsAdmin(page);
   await page.goto("/login");
-  await expect(page).toHaveURL(/\/admin\/services$/);
+  await expect(page).toHaveURL(/\/admin\/agenda$/);
   await expect(page.getByRole("button", { name: "Sair", exact: true })).toBeVisible();
 });
 
@@ -184,7 +184,7 @@ test("clears a stale cookie and renders a usable login without a redirect loop",
   await page.reload();
   await expect(page.getByRole("button", { name: "Entrar", exact: true })).toBeEnabled();
   await submitLogin(page);
-  await expect(page).toHaveURL(/\/admin\/services$/);
+  await expect(page).toHaveURL(/\/admin\/agenda$/);
 });
 
 test("logs out and protects every administrative route and API afterward", async ({

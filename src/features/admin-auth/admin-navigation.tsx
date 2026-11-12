@@ -45,6 +45,12 @@ export function AdminNavigation() {
       <nav className="admin-nav" aria-label="Administração">
         <div className="admin-nav-links">
           <Link
+            aria-current={pathname === "/admin/agenda" ? "page" : undefined}
+            href="/admin/agenda"
+          >
+            Agenda
+          </Link>
+          <Link
             aria-current={pathname === "/admin/services" ? "page" : undefined}
             href="/admin/services"
           >

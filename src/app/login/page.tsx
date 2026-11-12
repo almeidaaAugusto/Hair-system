@@ -13,7 +13,7 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  if (await getOptionalAdminSession()) redirect("/admin/services");
+  if (await getOptionalAdminSession()) redirect("/admin/agenda");
 
   const { next } = await searchParams;
   const hasStaleSession = (await cookies()).get(ADMIN_SESSION_COOKIE_NAME) !== undefined;

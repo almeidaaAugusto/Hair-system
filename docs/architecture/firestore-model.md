@@ -32,12 +32,16 @@
 ```text
 salonId, professionalId, localDate
 startAt, endAt, occupiedUntilAt       // Timestamp UTC
-status                                // confirmed | cancelled
+status                                // confirmed | completed | no_show | cancelled
 client { name, phone }
 serviceSnapshot { serviceId, name, durationMinutes, startingPriceCents,
                   hasVariablePrice, requiresEvaluation }
 appointmentIntervalMinutes, source    // manual | whatsapp
-createdBy, updatedBy, createdAt, updatedAt, cancelledAt?
+createdBy, updatedBy, createdAt, updatedAt
+cancelledAt?, completedAt?, noShowAt?  // Timestamp UTC, presente conforme o status
+payment? { finalPriceCents, paidCents, method? }  // só em completed; centavos inteiros
+paymentUpdatedAt?                     // Timestamp UTC da última gravação do pagamento
+reminderSentAt?, clientConfirmedAt?   // Timestamp UTC; gravados uma vez, removidos ao mudar o horário
 ```
 
 `occupiedUntilAt` inclui o intervalo configurado e participa da verificação de conflito. Foto e histórico de cliente ficam para outra entrega.
@@ -59,9 +63,9 @@ Esse formato mantém a atualização semanal atômica e permite criar outro docu
 
 - Como futuras exceções por data serão representadas além da configuração semanal consolidada?
 - Como modelar avaliação: `pending_evaluation` dentro de `appointments` ou uma coleção de solicitações separada?
-- Pagamento parcial precisa de vários `paymentRecords`? Como distinguir pagamento autorizado, recebido e estornado?
+- Pagamento dividido em várias formas ou parcelas exigirá `paymentRecords` separados? No MVP o pagamento é um único registro dentro do atendimento.
 - Como foto e histórico serão associados ao cliente sem expor dados pessoais?
-- Como registrar faltas e auditoria de eventos em futuras entregas?
+- Como registrar auditoria de eventos (histórico de alterações de pagamento) em futuras entregas?
 - Qual será a retenção de `messageDeliveries`?
 
 ## Itens fora do MVP
@@ -75,3 +79,11 @@ Esse formato mantém a atualização semanal atômica e permite criar outro docu
 `appointments` e `timeBlocks` têm `salonId`, `professionalId` (`primary`), `localDate`, instantes UTC, autoria, timestamps e status. A reserva guarda contato mínimo, origem `manual` ou `whatsapp`, snapshots do serviço e intervalo; o cancelamento preserva o histórico. A consulta diária filtra salão, profissional e data local e ordena por início, com índices compostos para ambas as coleções. Acesso direto do cliente é negado.
 
 Cada mutação lê primeiro e atualiza transacionalmente `appointmentDayLocks`, identificado por salão, profissional e dia, serializando inclusive o primeiro registro do dia. IDs de criação derivam de SHA-256 do salão, comando e UUID; fingerprint do conteúdo normalizado detecta reutilização divergente. Reenvio igual retorna o registro existente, mesmo cancelado; cancelamentos repetidos preservam o primeiro instante.
+
+## Conclusão, falta e pagamento implementados
+
+Os estados operacionais são `confirmed → completed | no_show | cancelled`; concluído e falta são finais e não podem ser cancelados. Concluir ou marcar falta só é aceito a partir de `startAt`. Concluído e falta continuam ocupando o período; só o cancelamento o libera.
+
+O pagamento fica embutido no atendimento (`payment`), sem a coleção `paymentRecords` neste marco: valor final, valor pago (nunca maior que o final) e forma (`pix`, `cash`, `debit`, `credit`, obrigatória quando há valor pago). O saldo e o status financeiro (`not_recorded`, `unpaid`, `partial`, `paid`) são derivados, nunca gravados. Registrar novamente substitui o pagamento anterior (correção). O total recebido soma apenas atendimentos concluídos e integralmente pagos (RN-12).
+
+Esses comandos não alteram a ocupação do dia, por isso a transação lê e grava apenas o documento do atendimento; um cancelamento simultâneo também grava esse documento, e o Firestore serializa os dois.

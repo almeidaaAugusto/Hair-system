@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  FieldValue,
   getFirestore,
   Timestamp,
   type DocumentData,
@@ -12,18 +13,32 @@ import {
   AppointmentRuleError,
   appointmentSchema,
   availabilityQuerySchema,
+  completeAppointmentInputSchema,
   createAppointmentInputSchema,
   createTimeBlockInputSchema,
   documentIdSchema,
+  paymentSchema,
+  rescheduleInputSchema,
   localDateSchema,
+  rangeQuerySchema,
   timeBlockSchema,
   type Appointment,
   type TimeBlock,
 } from "@/domain/appointments/appointment";
 import {
+  assertCancellable,
+  completeAppointment,
+  markClientConfirmed,
+  markNoShow,
+  markReminderSent,
+  recordPayment,
+  type AppointmentChange,
+} from "@/domain/appointments/attendance";
+import {
   buildAppointment,
   buildTimeBlock,
   calculateAvailability,
+  rescheduleAppointment,
 } from "@/domain/appointments/availability";
 import { getLocalDate } from "@/domain/appointments/local-date";
 import {
@@ -47,7 +62,27 @@ const instantFields = [
   "createdAt",
   "updatedAt",
   "cancelledAt",
+  "completedAt",
+  "noShowAt",
+  "paymentUpdatedAt",
+  "reminderSentAt",
+  "clientConfirmedAt",
 ];
+
+/** Firestore update for the given fields; absent optional fields are removed. */
+function toPatch(record: Appointment, keys: readonly (keyof Appointment)[]): DocumentData {
+  const patch: DocumentData = {};
+  for (const key of keys) {
+    const value = record[key];
+    patch[key] =
+      value === undefined
+        ? FieldValue.delete()
+        : typeof value === "string" && instantFields.includes(key)
+          ? Timestamp.fromDate(new Date(value))
+          : value;
+  }
+  return patch;
+}
 
 function hash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -128,15 +163,20 @@ export function createFirestoreAppointmentsRepository(
     transaction?: Transaction,
   ) {
     const serviceRef = firestore.collection("services").doc(serviceId);
-    const hoursRef = firestore
-      .collection("businessHours")
-      .doc(businessHoursDocumentId(salonId, DEFAULT_PROFESSIONAL_ID));
-    const [serviceSnapshot, hoursSnapshot] = transaction
-      ? [await transaction.get(serviceRef), await transaction.get(hoursRef)]
-      : await Promise.all([serviceRef.get(), hoursRef.get()]);
+    const [serviceSnapshot, businessHours] = transaction
+      ? [await transaction.get(serviceRef), await readHours(salonId, transaction)]
+      : await Promise.all([serviceRef.get(), readHours(salonId)]);
     const serviceData = serviceSnapshot.data();
     if (!serviceSnapshot.exists || serviceData?.salonId !== salonId) notFound();
     const service = { ...createServiceSchema.strip().parse(serviceData), id: serviceId, salonId };
+    return { service, businessHours };
+  }
+
+  async function readHours(salonId: string, transaction?: Transaction) {
+    const hoursRef = firestore
+      .collection("businessHours")
+      .doc(businessHoursDocumentId(salonId, DEFAULT_PROFESSIONAL_ID));
+    const hoursSnapshot = transaction ? await transaction.get(hoursRef) : await hoursRef.get();
     const hoursData = hoursSnapshot.data();
     if (
       hoursSnapshot.exists &&
@@ -151,7 +191,7 @@ export function createFirestoreAppointmentsRepository(
         timezone: BUSINESS_HOURS_TIME_ZONE,
       },
     );
-    return { service, businessHours };
+    return businessHours;
   }
 
   async function readGuard(transaction: Transaction, scope: Scope) {
@@ -205,6 +245,7 @@ export function createFirestoreAppointmentsRepository(
     salon: string,
     user: string,
     id: string,
+    precondition: (record: T) => void = () => {},
   ): Promise<T> {
     const salonId = documentIdSchema.parse(salon);
     const userId = documentIdSchema.parse(user);
@@ -225,6 +266,7 @@ export function createFirestoreAppointmentsRepository(
       const snapshot = await transaction.get(reference);
       const record = decode(snapshot, scope);
       if (record.status === "cancelled") return record;
+      precondition(record);
       const cancelled = {
         ...record,
         status: "cancelled" as const,
@@ -244,6 +286,44 @@ export function createFirestoreAppointmentsRepository(
     });
   }
 
+  /**
+   * Attendance commands change neither the occupied period nor the day's
+   * occupation, so they serialize on the appointment document alone; a
+   * concurrent cancellation also reads and writes that document.
+   */
+  async function transitionAppointment(
+    salon: string,
+    user: string,
+    id: string,
+    transition: (
+      appointment: Appointment,
+      actor: { userId: string; now: string },
+    ) => AppointmentChange | null,
+  ): Promise<Appointment> {
+    const salonId = documentIdSchema.parse(salon);
+    const userId = documentIdSchema.parse(user);
+    const reference = firestore.collection("appointments").doc(documentIdSchema.parse(id));
+    const now = new Date().toISOString();
+    return firestore.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(reference);
+      const location = snapshot.data();
+      if (
+        !snapshot.exists ||
+        location?.salonId !== salonId ||
+        location.professionalId !== DEFAULT_PROFESSIONAL_ID
+      )
+        notFound();
+      const appointment = decodeAppointment(snapshot, {
+        salonId,
+        localDate: localDateSchema.parse(location.localDate),
+      });
+      const change = transition(appointment, { userId, now });
+      if (!change) return appointment;
+      transaction.update(reference, toPatch(change.appointment, change.changed));
+      return change.appointment;
+    });
+  }
+
   return {
     async getAvailability(salon, query) {
       const salonId = documentIdSchema.parse(salon);
@@ -258,7 +338,14 @@ export function createFirestoreAppointmentsRepository(
         serviceId: input.serviceId,
         durationMinutes: context.service.durationMinutes,
         appointmentIntervalMinutes: context.businessHours.appointmentIntervalMinutes,
-        windows: calculateAvailability({ date: input.date, ...context, ...occupation }),
+        windows: calculateAvailability({
+          date: input.date,
+          ...context,
+          timeBlocks: occupation.timeBlocks,
+          appointments: occupation.appointments.filter(
+            (appointment) => appointment.id !== input.excludeAppointmentId,
+          ),
+        }),
       };
     },
 
@@ -271,6 +358,37 @@ export function createFirestoreAppointmentsRepository(
         date: scope.localDate,
         timezone: BUSINESS_HOURS_TIME_ZONE,
         ...(await readDay(scope)),
+      };
+    },
+
+    async getRange(salon, fromValue, toValue) {
+      const salonId = documentIdSchema.parse(salon);
+      const { from, to } = rangeQuerySchema.parse({ from: fromValue, to: toValue });
+      const rangeQuery = (collection: string) =>
+        firestore
+          .collection(collection)
+          .where("salonId", "==", salonId)
+          .where("professionalId", "==", DEFAULT_PROFESSIONAL_ID)
+          .where("localDate", ">=", from)
+          .where("localDate", "<=", to)
+          .orderBy("localDate", "asc")
+          .orderBy("startAt", "asc");
+      const [appointments, blocks] = await Promise.all([
+        rangeQuery("appointments").get(),
+        rangeQuery("timeBlocks").get(),
+      ]);
+      // Each record is decoded against its own day so the stored date stays verified.
+      const decodeEach = <T>(snapshot: DocumentSnapshot, decode: Decoder<T>) => {
+        const localDate = localDateSchema.parse(snapshot.get("localDate"));
+        if (localDate < from || localDate > to) notFound();
+        return decode(snapshot, { salonId, localDate });
+      };
+      return {
+        from,
+        to,
+        timezone: BUSINESS_HOURS_TIME_ZONE,
+        appointments: appointments.docs.map((document) => decodeEach(document, decodeAppointment)),
+        timeBlocks: blocks.docs.map((document) => decodeEach(document, decodeTimeBlock)),
       };
     },
 
@@ -310,7 +428,103 @@ export function createFirestoreAppointmentsRepository(
     },
 
     cancel: (salonId, userId, id) =>
-      cancelRecord("appointments", decodeAppointment, salonId, userId, id),
+      cancelRecord("appointments", decodeAppointment, salonId, userId, id, assertCancellable),
+
+    complete: (salonId, userId, id, value) => {
+      const input = completeAppointmentInputSchema.parse(value);
+      return transitionAppointment(salonId, userId, id, (appointment, actor) =>
+        completeAppointment(appointment, actor, input.payment),
+      );
+    },
+
+    async reschedule(salon, user, id, value) {
+      const salonId = documentIdSchema.parse(salon);
+      const userId = documentIdSchema.parse(user);
+      const input = rescheduleInputSchema.parse(value);
+      const reference = firestore.collection("appointments").doc(documentIdSchema.parse(id));
+      // External read only locates the current day; everything is revalidated below.
+      const located = await reference.get();
+      const location = located.data();
+      if (
+        !located.exists ||
+        location?.salonId !== salonId ||
+        location.professionalId !== DEFAULT_PROFESSIONAL_ID
+      )
+        notFound();
+      const fromScope = { salonId, localDate: localDateSchema.parse(location.localDate) };
+      const toScope = { salonId, localDate: getLocalDate(input.startAt) };
+      const scopes = [fromScope, toScope]
+        .filter(
+          (scope, index, all) => all.findIndex((s) => s.localDate === scope.localDate) === index,
+        )
+        .sort((a, b) => a.localDate.localeCompare(b.localDate));
+      const now = new Date().toISOString();
+      return firestore.runTransaction(async (transaction) => {
+        // Both day guards are read first, in a fixed order, before any other read.
+        const guards = [];
+        for (const scope of scopes)
+          guards.push({ scope, guard: await readGuard(transaction, scope) });
+        const snapshot = await transaction.get(reference);
+        if (snapshot.get("localDate") !== fromScope.localDate)
+          throw new AppointmentRuleError(
+            "CONFLICT",
+            "O atendimento foi alterado em paralelo. Atualize a agenda.",
+          );
+        const appointment = decodeAppointment(snapshot, fromScope);
+        const changesService =
+          input.serviceId !== undefined &&
+          input.serviceId !== appointment.serviceSnapshot.serviceId;
+        const context = changesService
+          ? await readServiceAndHours(salonId, input.serviceId!, transaction)
+          : { businessHours: await readHours(salonId, transaction) };
+        const occupation = await readDay(toScope, transaction);
+        const moved = rescheduleAppointment(appointment, {
+          ...context,
+          ...occupation,
+          startAt: input.startAt,
+          userId,
+          now,
+        });
+        if (!moved) return appointment;
+        const patch = toPatch(moved, [
+          "localDate",
+          "startAt",
+          "endAt",
+          "occupiedUntilAt",
+          "serviceSnapshot",
+          "appointmentIntervalMinutes",
+          "reminderSentAt",
+          "clientConfirmedAt",
+          "updatedAt",
+          "updatedBy",
+        ]);
+        transaction.update(reference, patch);
+        for (const { scope, guard } of guards) writeGuard(transaction, guard, scope, now);
+        return moved;
+      });
+    },
+
+    markReminderSent: (salonId, userId, id) =>
+      transitionAppointment(salonId, userId, id, (appointment, actor) =>
+        markReminderSent(appointment, actor),
+      ),
+
+    markClientConfirmed: (salonId, userId, id) =>
+      transitionAppointment(salonId, userId, id, (appointment, actor) =>
+        markClientConfirmed(appointment, actor),
+      ),
+
+    markNoShow: (salonId, userId, id) =>
+      transitionAppointment(salonId, userId, id, (appointment, actor) =>
+        markNoShow(appointment, actor),
+      ),
+
+    recordPayment: (salonId, userId, id, value) => {
+      const payment = paymentSchema.parse(value);
+      return transitionAppointment(salonId, userId, id, (appointment, actor) =>
+        recordPayment(appointment, payment, actor),
+      );
+    },
 
     async createBlock(salon, user, value) {
       const salonId = documentIdSchema.parse(salon);

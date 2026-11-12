@@ -43,7 +43,9 @@
 - A verificação e confirmação de disponibilidade ocorrerão no servidor em transação; o navegador não grava diretamente em `appointments`.
 - Reagendamentos e alterações de serviço recalcularão apenas os dados operacionais do agendamento editado, preservando os snapshots já registrados conforme a política definida.
 - Operações públicas terão chave de idempotência para evitar duplicidade em reenvios.
-- O status de pagamento será separado do status do atendimento para representar corretamente concluído, pago e saldo em aberto.
+- O status de pagamento é separado do status do atendimento: um atendimento concluído pode ficar sem pagamento registrado, não pago, parcialmente pago ou pago.
+- Concluir e marcar falta só são possíveis a partir do horário de início; concluído e falta não podem ser cancelados e continuam ocupando o horário.
+- No MVP, cada atendimento tem um único registro de pagamento (valor final, valor pago e forma), que pode ser corrigido; pagamento dividido entre formas e sinal antes do atendimento não são suportados.
 
 ## Perguntas ainda abertas
 

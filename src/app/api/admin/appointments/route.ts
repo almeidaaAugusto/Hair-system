@@ -1,4 +1,4 @@
-﻿import { createAppointmentInputSchema, dayQuerySchema } from "@/domain/appointments/appointment";
+﻿import { agendaQuerySchema, createAppointmentInputSchema } from "@/domain/appointments/appointment";
 import { authenticateAdmin } from "@/server/auth/admin-context";
 import {
   errorResponse,
@@ -13,8 +13,13 @@ const route = "/api/admin/appointments";
 export async function GET(request: Request): Promise<Response> {
   try {
     const admin = await authenticateAdmin(request);
-    const query = parseQuery(request, dayQuerySchema);
-    return respond(await createFirestoreAppointmentsRepository().getDay(admin.salonId, query.date));
+    const query = parseQuery(request, agendaQuerySchema);
+    const repository = createFirestoreAppointmentsRepository();
+    return respond(
+      "date" in query
+        ? await repository.getDay(admin.salonId, query.date)
+        : await repository.getRange(admin.salonId, query.from, query.to),
+    );
   } catch (error) {
     return errorResponse(route, error);
   }

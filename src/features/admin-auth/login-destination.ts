@@ -1,4 +1,4 @@
-const DEFAULT_ADMIN_DESTINATION = "/admin/services";
+const DEFAULT_ADMIN_DESTINATION = "/admin/agenda";
 const INVALID_CREDENTIAL_CODES = new Set([
   "auth/invalid-credential",
   "auth/invalid-email",

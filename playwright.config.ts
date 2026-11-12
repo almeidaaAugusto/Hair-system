@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testIgnore: "**/admin-auth.spec.ts",
+  testIgnore: ["**/admin-auth.spec.ts", "**/admin-agenda.spec.ts"],
   fullyParallel: true,
   reporter: "list",
   use: {

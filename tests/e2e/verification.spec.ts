@@ -25,3 +25,12 @@ test("redireciona o acesso administrativo de expediente para o login", async ({ 
   await expect(page.getByRole("heading", { name: "Administração" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Entrar" })).toBeVisible();
 });
+
+test("redireciona o acesso administrativo da agenda para o login", async ({ page }) => {
+  await page.goto("/admin/agenda");
+
+  await expect(page).toHaveURL(
+    (url) => url.pathname === "/login" && url.searchParams.get("next") === "/admin/agenda",
+  );
+  await expect(page.getByRole("heading", { name: "Administração" })).toBeVisible();
+});

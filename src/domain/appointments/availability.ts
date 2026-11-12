@@ -113,7 +113,8 @@ function occupiedIntervals(
     record.localDate === date;
   return [
     ...appointments
-      .filter((appointment) => sameScope(appointment) && appointment.status === "confirmed")
+      // Completed and no-show appointments keep their period; only cancellation frees it.
+      .filter((appointment) => sameScope(appointment) && appointment.status !== "cancelled")
       .map((appointment) => ({ startAt: appointment.startAt, endAt: appointment.occupiedUntilAt })),
     ...timeBlocks
       .filter((block) => sameScope(block) && block.status === "active")
@@ -168,17 +169,27 @@ function assertNoConflict(
   }
 }
 
-export function buildAppointment(
-  command: CommandContext & ServiceContext & { input: CreateAppointmentInput },
-): Appointment {
-  const input = createAppointmentInputSchema.parse(command.input);
-  if (command.service.salonId !== command.salonId || command.service.id !== input.serviceId) {
-    throw new AppointmentRuleError("NOT_FOUND", "Serviço não encontrado.");
-  }
+type SlotPlan = Pick<
+  Appointment,
+  | "localDate"
+  | "startAt"
+  | "endAt"
+  | "occupiedUntilAt"
+  | "serviceSnapshot"
+  | "appointmentIntervalMinutes"
+>;
+
+/**
+ * Validates a start for a service against business hours and the day's
+ * occupation, returning the period and snapshots a confirmed appointment keeps.
+ */
+function planSlot(
+  command: Occupation & ServiceContext & { salonId: string; startAt: string },
+): SlotPlan {
   const hours = resolveHours(command);
-  const date = getLocalDate(input.startAt);
+  const date = getLocalDate(command.startAt);
   const working = workingInterval(date, hours);
-  const start = Date.parse(input.startAt);
+  const start = Date.parse(command.startAt);
   const duration = command.service.durationMinutes + hours.appointmentIntervalMinutes;
   if (
     !working ||
@@ -193,22 +204,17 @@ export function buildAppointment(
   const endAt = new Date(start + command.service.durationMinutes * 60_000).toISOString();
   const occupiedUntilAt = new Date(start + duration * 60_000).toISOString();
   assertNoConflict(
-    { startAt: input.startAt, endAt: occupiedUntilAt },
+    { startAt: command.startAt, endAt: occupiedUntilAt },
     command.salonId,
     date,
     command,
   );
   const service = command.service;
-  return appointmentSchema.parse({
-    id: command.id,
-    salonId: command.salonId,
-    professionalId: DEFAULT_PROFESSIONAL_ID,
+  return {
     localDate: date,
-    startAt: input.startAt,
+    startAt: command.startAt,
     endAt,
     occupiedUntilAt,
-    status: "confirmed",
-    client: input.client,
     serviceSnapshot: {
       serviceId: service.id,
       name: service.name,
@@ -218,11 +224,95 @@ export function buildAppointment(
       requiresEvaluation: service.requiresEvaluation,
     },
     appointmentIntervalMinutes: hours.appointmentIntervalMinutes,
+  };
+}
+
+export function buildAppointment(
+  command: CommandContext & ServiceContext & { input: CreateAppointmentInput },
+): Appointment {
+  const input = createAppointmentInputSchema.parse(command.input);
+  if (command.service.salonId !== command.salonId || command.service.id !== input.serviceId) {
+    throw new AppointmentRuleError("NOT_FOUND", "Serviço não encontrado.");
+  }
+  return appointmentSchema.parse({
+    id: command.id,
+    salonId: command.salonId,
+    professionalId: DEFAULT_PROFESSIONAL_ID,
+    ...planSlot({ ...command, startAt: input.startAt }),
+    status: "confirmed",
+    client: input.client,
     source: input.source,
     createdBy: command.userId,
     updatedBy: command.userId,
     createdAt: command.now,
     updatedAt: command.now,
+  });
+}
+
+export type RescheduleCommand = Occupation &
+  Partial<ServiceContext> & {
+    userId: string;
+    now: string;
+    startAt: string;
+    /** Current business hours; required to recompute the occupied period. */
+    businessHours?: BusinessHours | null;
+  };
+
+/**
+ * Moves a confirmed appointment and/or changes its service (RF-ATE-01).
+ * Without `service`, the original snapshot (duration and informed price) is
+ * kept; with it, a new snapshot is taken. The appointment's own period never
+ * conflicts with itself. Returns null when nothing changes.
+ */
+export function rescheduleAppointment(
+  appointment: Appointment,
+  command: RescheduleCommand,
+): Appointment | null {
+  if (appointment.status !== "confirmed") {
+    throw new AppointmentRuleError(
+      "INVALID_TRANSITION",
+      "Somente atendimentos confirmados podem ser reagendados.",
+    );
+  }
+  const startAt = utcMinuteSchema.parse(command.startAt);
+  const service: Service = command.service ?? {
+    id: appointment.serviceSnapshot.serviceId,
+    salonId: appointment.salonId,
+    name: appointment.serviceSnapshot.name,
+    durationMinutes: appointment.serviceSnapshot.durationMinutes,
+    startingPriceCents: appointment.serviceSnapshot.startingPriceCents,
+    hasVariablePrice: appointment.serviceSnapshot.hasVariablePrice,
+    requiresEvaluation: appointment.serviceSnapshot.requiresEvaluation,
+    isActive: true,
+  };
+  if (service.salonId !== appointment.salonId) {
+    throw new AppointmentRuleError("NOT_FOUND", "Serviço não encontrado.");
+  }
+  const plan = planSlot({
+    salonId: appointment.salonId,
+    service,
+    businessHours: command.businessHours,
+    startAt,
+    appointments: command.appointments.filter((other) => other.id !== appointment.id),
+    timeBlocks: command.timeBlocks,
+  });
+  const unchanged =
+    plan.startAt === appointment.startAt &&
+    plan.occupiedUntilAt === appointment.occupiedUntilAt &&
+    (Object.keys(plan.serviceSnapshot) as (keyof SlotPlan["serviceSnapshot"])[]).every(
+      (key) => plan.serviceSnapshot[key] === appointment.serviceSnapshot[key],
+    );
+  if (unchanged) return null;
+  // A new time needs a new reminder and a new confirmation from the client.
+  const { reminderSentAt, clientConfirmedAt, ...rest } = appointment;
+  const sameTime = plan.startAt === appointment.startAt;
+  return appointmentSchema.parse({
+    ...rest,
+    ...(sameTime && reminderSentAt ? { reminderSentAt } : {}),
+    ...(sameTime && clientConfirmedAt ? { clientConfirmedAt } : {}),
+    ...plan,
+    updatedAt: command.now,
+    updatedBy: command.userId,
   });
 }
 
