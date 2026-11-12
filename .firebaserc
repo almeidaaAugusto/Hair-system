@@ -1,7 +1,8 @@
 {
   "projects": {
     "default": "demo-sistema-cabelo",
-    "dev": "hair-sys"
+    "dev": "hair-sys",
+    "piloto": "hair-sys-piloto"
   },
   "targets": {},
   "etags": {}
