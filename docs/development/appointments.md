@@ -35,3 +35,15 @@ Exemplos fictícios:
 Os instantes são UTC com precisão de minuto, datas e expediente usam `America/Sao_Paulo`, e disponibilidade retorna janelas livres com último início possível. A reserva inclui a pausa na ocupação e a transação revalida o serviço e o expediente. Um UUID repetido com o mesmo conteúdo retorna o registro original (também se cancelado); conteúdo diferente gera conflito. Cancelamentos são idempotentes. Bloqueios são diários, simples e podem cobrir o dia inteiro.
 
 JSON malformado retorna 400; autenticação/autorização 401/403; recurso ausente ou fora do salão 404; validação e período inválido 422; conflito, serviço inelegível, fora do expediente ou UUID divergente 409. Falhas internas retornam 500 genérico sem dados pessoais. Não há limite artificial de antecedência. O fluxo público, interface, cadastro separado de clientes, recorrência, férias, reagendamento e pagamentos ainda não estão implementados neste marco.
+
+## Verificação local do marco
+
+Verificado em 2026-11-12, sem implantação:
+
+- Prettier nos arquivos alterados, `npm run lint` e `npm run typecheck`: aprovados.
+- `npm test`: 263 testes em 30 arquivos aprovados, incluindo 19 testes HTTP.
+- `npm run test:integration`: 31 testes aprovados nos emuladores de teste, cobrindo transações e Rules. Após centralizar a validação de reenvios, os seis casos de integração afetados foram executados novamente e aprovados.
+- `npm run test:e2e`: três verificações de navegador aprovadas.
+- `npm run build`: aprovado; no servidor compilado, as seis operações sem sessão retornaram 401 JSON com `no-store`, e as três páginas administrativas retornaram 307 para o login.
+
+A integração exige Java 21 e usa somente `firebase.test.json` e o projeto fictício `demo-sistema-cabelo`. Execute emuladores, testes de navegador e build em sequência para evitar disputa por portas e pelo diretório `.next`. Os testes HTTP compartilham um arquivo de fixtures e mocks; a separação por rota pode ser feita quando a manutenção justificar.
