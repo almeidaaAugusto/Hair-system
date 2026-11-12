@@ -69,10 +69,11 @@
 **Files:**
 
 - Create: `src/app/api/admin/appointments/route.ts` e `.test.ts`.
-- Create: `src/app/api/admin/appointments/availability/route.ts` e `.test.ts`.
-- Create: `src/app/api/admin/appointments/[appointmentId]/cancel/route.ts` e `.test.ts`.
-- Create: `src/app/api/admin/time-blocks/route.ts` e `.test.ts`.
-- Create: `src/app/api/admin/time-blocks/[blockId]/cancel/route.ts` e `.test.ts`.
+- Create: `src/app/api/admin/appointments/availability/route.ts`.
+- Create: `src/app/api/admin/appointments/[appointmentId]/cancel/route.ts`.
+- Create: `src/app/api/admin/time-blocks/route.ts`.
+- Create: `src/app/api/admin/time-blocks/[blockId]/cancel/route.ts`.
+- Test: as seis operações ficam em `src/app/api/admin/appointments/route.test.ts`, compartilhando mocks e fixtures, com cobertura explícita das fronteiras de cada handler.
 - Create: `src/server/appointments/appointment-http.ts` (erros/respostas/query compartilhados, sem regras de domínio).
 - Modify: `docs/architecture/overview.md`, `docs/architecture/firestore-model.md`, `docs/product/business-rules.md`, `docs/product/open-questions.md`.
 - Create: `docs/development/appointments.md` com contratos, exemplos sem dados reais, decisões e limitações do marco.

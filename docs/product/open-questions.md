@@ -48,3 +48,7 @@
 
 - Definir ou implantar pagamento online.
 - Módulos de estoque, despesas, lucro, comissões, fidelidade e aplicativo móvel.
+
+## Decis?es confirmadas pelos documentos de requisitos
+
+N?o h? anteced?ncia m?nima ou m?xima artificial. A profissional efetiva cancelamentos. Bloqueios s?o manuais e simples, inclusive de dia inteiro; recorr?ncia e f?rias n?o fazem parte deste marco. Cadastro separado de clientes e interface da agenda ficam para entregas futuras.

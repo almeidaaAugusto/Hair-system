@@ -30,19 +30,17 @@
 ### Documento `appointments`
 
 ```text
-salonId, professionalId
+salonId, professionalId, localDate
 startAt, endAt, occupiedUntilAt       // Timestamp UTC
-status                                // hipótese: pending_evaluation | confirmed | completed | cancelled | no_show
-client { name, phone?, ... }          // campos finais dependem da política de privacidade
+status                                // confirmed | cancelled
+client { name, phone }
 serviceSnapshot { serviceId, name, durationMinutes, startingPriceCents,
-                  requiresEvaluation }
-pricing { quotedPriceCents?, finalPriceCents? }
-paymentSummary { paidCents, outstandingCents, isPaid }
-source                                // public_booking | whatsapp_manual | admin
-createdAt, updatedAt, cancelledAt?
+                  hasVariablePrice, requiresEvaluation }
+appointmentIntervalMinutes, source    // manual | whatsapp
+createdBy, updatedBy, createdAt, updatedAt, cancelledAt?
 ```
 
-`occupiedUntilAt` representa `endAt` mais o intervalo configurado e deve ser usado na verificação de conflito. O formato de `client` e a presença de foto ficam pendentes de decisão de privacidade e armazenamento.
+`occupiedUntilAt` inclui o intervalo configurado e participa da verifica??o de conflito. Foto e hist?rico de cliente ficam para outra entrega.
 
 ### Documento `businessHours`
 
@@ -71,3 +69,9 @@ Esse formato mantém a atualização semanal atômica e permite criar outro docu
 - Coleções e fluxos de pagamento online, estoque, despesas, lucro, comissões e fidelidade.
 - Perfil autenticado de cliente e dados de aplicativo mobile.
 - Modelo definitivo de múltiplos salões ou múltiplas profissionais; os identificadores existentes apenas preservam compatibilidade de evolução.
+
+## Agenda administrativa implementada
+
+`appointments` e `timeBlocks` t?m `salonId`, `professionalId` (`primary`), `localDate`, instantes UTC, autoria, timestamps e status. A reserva guarda contato m?nimo, origem `manual` ou `whatsapp`, snapshots do servi?o e intervalo; o cancelamento preserva o hist?rico. A consulta di?ria filtra sal?o, profissional e data local e ordena por in?cio, com ?ndices compostos para ambas as cole??es. Acesso direto do cliente ? negado.
+
+Cada muta??o l? primeiro e atualiza transacionalmente `appointmentDayLocks`, identificado por sal?o, profissional e dia, serializando inclusive o primeiro registro do dia. IDs de cria??o derivam de SHA-256 do sal?o, comando e UUID; fingerprint do conte?do normalizado detecta reutiliza??o divergente. Reenvio igual retorna o registro existente, mesmo cancelado; cancelamentos repetidos preservam o primeiro instante.

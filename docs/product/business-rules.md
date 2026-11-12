@@ -49,7 +49,6 @@
 
 - Qual é o fluxo exato para um serviço que exige avaliação: pedido sem horário, reserva provisória, ou horário confirmado somente após aprovação?
 - Qual é o prazo para criação, cancelamento e reagendamento pela página pública, já que não há limites definidos?
-- Bloqueios podem ser recorrentes, de dia inteiro e/ou se sobrepor a outros bloqueios?
 - Como a cliente envia a foto do cabelo e por quanto tempo ela é mantida?
 - Qual endereço e quais orientações variam por serviço?
 - Quando uma ausência deve liberar ou não o horário, e pode haver cobrança?
@@ -61,3 +60,10 @@
 - Regras de estoque, despesas, lucro, comissões e fidelidade.
 - Autenticação de clientes.
 - Automação efetiva do WhatsApp até que fornecedor, consentimento, templates e custos sejam definidos.
+
+## Decis?es para a agenda administrativa
+
+- N?o h? anteced?ncia m?nima ou m?xima artificial. O cancelamento ? efetivado pela profissional.
+- Bloqueios s?o manuais e simples, podem cobrir um dia inteiro e n?o podem colidir com ocupa??es ativas; recorr?ncia e f?rias ficam para depois.
+- O intervalo completo, inclusive a pausa configurada, cabe no expediente. Reservas confirmadas e bloqueios ativos ocupam per?odos semiabertos; cancelados liberam o hor?rio.
+- Servi?os inativos ou que exigem avalia??o n?o s?o confirmados neste comando. A reserva guarda nome e telefone como snapshots m?nimos, sem cadastro separado de clientes.
