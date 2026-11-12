@@ -40,7 +40,7 @@ appointmentIntervalMinutes, source    // manual | whatsapp
 createdBy, updatedBy, createdAt, updatedAt, cancelledAt?
 ```
 
-`occupiedUntilAt` inclui o intervalo configurado e participa da verifica??o de conflito. Foto e hist?rico de cliente ficam para outra entrega.
+`occupiedUntilAt` inclui o intervalo configurado e participa da verificação de conflito. Foto e histórico de cliente ficam para outra entrega.
 
 ### Documento `businessHours`
 
@@ -57,12 +57,12 @@ Esse formato mantém a atualização semanal atômica e permite criar outro docu
 
 ## Perguntas ainda abertas
 
-- `businessHours` será um documento por dia da semana, uma configuração consolidada ou terá exceções por data?
+- Como futuras exceções por data serão representadas além da configuração semanal consolidada?
 - Como modelar avaliação: `pending_evaluation` dentro de `appointments` ou uma coleção de solicitações separada?
 - Pagamento parcial precisa de vários `paymentRecords`? Como distinguir pagamento autorizado, recebido e estornado?
-- Qual é o formato mínimo de cliente e como foto/histórico serão associados sem expor dados pessoais?
-- Cancelamentos e faltas serão mantidos em `appointments` para histórico ou replicados em uma auditoria de eventos?
-- Quais consultas exigirão índices compostos e qual será a retenção de `messageDeliveries`?
+- Como foto e histórico serão associados ao cliente sem expor dados pessoais?
+- Como registrar faltas e auditoria de eventos em futuras entregas?
+- Qual será a retenção de `messageDeliveries`?
 
 ## Itens fora do MVP
 
@@ -72,6 +72,6 @@ Esse formato mantém a atualização semanal atômica e permite criar outro docu
 
 ## Agenda administrativa implementada
 
-`appointments` e `timeBlocks` t?m `salonId`, `professionalId` (`primary`), `localDate`, instantes UTC, autoria, timestamps e status. A reserva guarda contato m?nimo, origem `manual` ou `whatsapp`, snapshots do servi?o e intervalo; o cancelamento preserva o hist?rico. A consulta di?ria filtra sal?o, profissional e data local e ordena por in?cio, com ?ndices compostos para ambas as cole??es. Acesso direto do cliente ? negado.
+`appointments` e `timeBlocks` têm `salonId`, `professionalId` (`primary`), `localDate`, instantes UTC, autoria, timestamps e status. A reserva guarda contato mínimo, origem `manual` ou `whatsapp`, snapshots do serviço e intervalo; o cancelamento preserva o histórico. A consulta diária filtra salão, profissional e data local e ordena por início, com índices compostos para ambas as coleções. Acesso direto do cliente é negado.
 
-Cada muta??o l? primeiro e atualiza transacionalmente `appointmentDayLocks`, identificado por sal?o, profissional e dia, serializando inclusive o primeiro registro do dia. IDs de cria??o derivam de SHA-256 do sal?o, comando e UUID; fingerprint do conte?do normalizado detecta reutiliza??o divergente. Reenvio igual retorna o registro existente, mesmo cancelado; cancelamentos repetidos preservam o primeiro instante.
+Cada mutação lê primeiro e atualiza transacionalmente `appointmentDayLocks`, identificado por salão, profissional e dia, serializando inclusive o primeiro registro do dia. IDs de criação derivam de SHA-256 do salão, comando e UUID; fingerprint do conteúdo normalizado detecta reutilização divergente. Reenvio igual retorna o registro existente, mesmo cancelado; cancelamentos repetidos preservam o primeiro instante.

@@ -15,16 +15,16 @@
 ## Hipóteses técnicas
 
 ```text
-Painel administrativo ? Route Handlers Next.js (Node, autentica??o e valida??o)
-                                  ?
-                     Dom?nio e reposit?rio
-                                  ?
-                   Firestore (transa??es e dados)
+Painel administrativo → Route Handlers Next.js (Node, autenticação e validação)
+                                  ↓
+                     Domínio e repositório
+                                  ↓
+                   Firestore (transações e dados)
 ```
 
 - Encapsular comandos críticos — confirmar, reagendar, cancelar, bloquear, concluir e registrar pagamento — em funções de servidor que validam entrada e autorização antes da escrita.
 - Concentrar cálculo de disponibilidade, duração ocupada, conflitos, limites de expediente e transições de status em módulos puros de domínio, testáveis com Vitest.
-- Negar ao navegador leituras e escritas diretas das cole??es de agenda; o servidor verifica identidade e escopo `salonId`.
+- Negar ao navegador leituras e escritas diretas das coleções de agenda; o servidor verifica identidade e escopo `salonId`.
 - Representar integrações de WhatsApp como adaptadores; a definição do provedor não deve vazar para a regra de negócio.
 - Usar transações do Firestore nas mutações que dependem de disponibilidade, para que tentativas concorrentes não confirmem o mesmo horário.
 - Executar testes contra emuladores quando houver Firestore, Authentication, Functions ou regras envolvidas.
@@ -54,6 +54,6 @@ Painel administrativo ? Route Handlers Next.js (Node, autentica??o e valida??o)
 - Arquitetura de estoque, despesas, lucro, comissões ou fidelidade.
 - Aplicativo mobile nativo e identidade autenticada de clientes.
 
-## Decis?o: backend administrativo confi?vel
+## Decisão: backend administrativo confiável
 
-Neste marco, Route Handlers Next.js no runtime Node autenticam e validam cada opera??o administrativa e executam transa??es no Firestore via Admin SDK. Esse servidor confi?vel ? equivalente ao backend previsto nos requisitos; dom?nio e reposit?rio independem dos handlers e permitem futura extra??o para Cloud Functions. As regras negam acesso direto do navegador ?s cole??es de agenda. O fluxo p?blico permanece para outra entrega.
+Neste marco, Route Handlers Next.js no runtime Node autenticam e validam cada operação administrativa e executam transações no Firestore via Admin SDK. Esse servidor confiável é equivalente ao backend previsto nos requisitos; domínio e repositório independem dos handlers e permitem futura extração para Cloud Functions. As regras negam acesso direto do navegador às coleções de agenda. O fluxo público permanece para outra entrega.

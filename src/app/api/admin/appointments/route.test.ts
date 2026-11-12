@@ -95,6 +95,33 @@ describe("administrative appointment HTTP API", () => {
       expect((await GET(req(`/x?${q}`))).status).toBe(422);
     expect(m.factory).not.toHaveBeenCalled();
   });
+  it("rejects invalid availability queries before accessing the repository", async () => {
+    for (const query of [
+      "date=2026-11-12&serviceId=service&serviceId=other",
+      "date=2026-11-12&serviceId=service&salonId=other",
+      "date=2026-11-12",
+      "date=2026-02-30&serviceId=service",
+    ]) {
+      const response = await availability(req(`/x?${query}`));
+      expect(response.status).toBe(422);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    }
+    expect(m.factory).not.toHaveBeenCalled();
+  });
+  it("rejects malformed and forged block input before accessing the repository", async () => {
+    expect((await block(req("/x", "{"))).status).toBe(400);
+    expect((await block(req("/x", { ...blockInput, salonId: "other" }))).status).toBe(422);
+    expect((await block(req("/x", { ...blockInput, startAt: "invalid" }))).status).toBe(422);
+    expect(m.factory).not.toHaveBeenCalled();
+  });
+  it("rejects invalid block cancellation IDs before accessing the repository", async () => {
+    const response = await cancelBlock(req("/x"), {
+      params: Promise.resolve({ blockId: "bad/id" }),
+    });
+    expect(response.status).toBe(422);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(m.factory).not.toHaveBeenCalled();
+  });
   it("creates and replays appointments using verified identity", async () => {
     m.repo.reserve
       .mockResolvedValueOnce({ appointment: { id: "a" }, replayed: false })

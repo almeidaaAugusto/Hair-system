@@ -5,14 +5,13 @@
 ### Fluxo público
 
 1. Um serviço que exige avaliação deve permitir escolher horário? Se sim, o horário é provisoriamente bloqueado ou só é reservado após aprovação manual?
-2. Quais são os prazos mínimos e máximos para criar, cancelar e reagendar pela página pública?
-3. A cliente poderá alterar ou cancelar sem autenticação? Qual mecanismo seguro identificará o agendamento?
-4. Foto do cabelo é obrigatória para todos os serviços ou apenas para avaliação? Qual tamanho, formatos aceitos e tempo de retenção?
+2. Como será o fluxo público de solicitação de alteração e identificação segura do agendamento?
+3. Foto do cabelo é obrigatória para todos os serviços ou apenas para avaliação? Qual tamanho, formatos aceitos e tempo de retenção?
 
 ### Operação da agenda
 
 5. Há exceções ao expediente normal — feriados, folgas, férias ou jornadas diferentes por dia — e como devem ser cadastradas?
-6. Bloqueios podem se repetir e abrangem apenas intervalos ou também dias inteiros?
+6. Como uma futura interface poderá organizar períodos de férias e outros bloqueios de vários dias?
 7. Alterar serviço ou horário pode mudar o preço e a duração já informados à cliente? Como registrar a justificativa e a versão anterior?
 8. Como tratar faltas: cobrar, manter saldo em aberto, enviar mensagem e/ou liberar um reagendamento?
 
@@ -38,7 +37,7 @@
 
 ## Hipóteses técnicas a validar
 
-- Usar um link opaco e com expiração para ações públicas de alteração/cancelamento, caso esse fluxo seja aprovado.
+- Avaliar identificação segura para futuras solicitações públicas de alteração.
 - Armazenar fotos fora do Firestore, com acesso controlado, metadados mínimos e prazo de retenção definido.
 - Implementar a integração de WhatsApp por uma camada de envio desacoplada, iniciando com registros de intenção/estado antes do provedor escolhido.
 - Até haver uma estratégia de equipe, o acesso administrativo exigirá um token Firebase com as claims `admin: true` e `salonId`; o servidor determina o salão a partir dessas claims.
@@ -49,6 +48,6 @@
 - Definir ou implantar pagamento online.
 - Módulos de estoque, despesas, lucro, comissões, fidelidade e aplicativo móvel.
 
-## Decis?es confirmadas pelos documentos de requisitos
+## Decisões confirmadas pelos documentos de requisitos
 
-N?o h? anteced?ncia m?nima ou m?xima artificial. A profissional efetiva cancelamentos. Bloqueios s?o manuais e simples, inclusive de dia inteiro; recorr?ncia e f?rias n?o fazem parte deste marco. Cadastro separado de clientes e interface da agenda ficam para entregas futuras.
+Não há antecedência mínima ou máxima artificial. A profissional efetiva cancelamentos. Bloqueios são manuais e simples, inclusive de dia inteiro; recorrência e férias não fazem parte deste marco. Cadastro separado de clientes e interface da agenda ficam para entregas futuras.
