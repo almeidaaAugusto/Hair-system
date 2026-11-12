@@ -402,10 +402,16 @@ function MonthAgenda({
                 >
                   <span className="agenda-month-number">{Number(date.slice(8))}</span>
                   {appointments > 0 ? (
-                    <span className="agenda-count">{appointments} atend.</span>
+                    <span className="agenda-count">
+                      {appointments}
+                      <span className="agenda-count-label"> atend.</span>
+                    </span>
                   ) : null}
                   {blocks > 0 ? (
-                    <span className="agenda-count is-block">{blocks} bloq.</span>
+                    <span className="agenda-count is-block">
+                      {blocks}
+                      <span className="agenda-count-label"> bloq.</span>
+                    </span>
                   ) : null}
                 </button>
               </div>

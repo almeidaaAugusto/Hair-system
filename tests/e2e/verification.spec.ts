@@ -1,9 +1,18 @@
 import { expect, test } from "@playwright/test";
 
-test("exibe a página de verificação", async ({ page }) => {
+test("exibe a página inicial da profissional", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Fundação pronta" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Gabriela Alvim" })).toBeVisible();
+  await expect(page.getByText("Saúde capilar começa no couro cabeludo")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Fale comigo no Instagram" })).toHaveAttribute(
+    "href",
+    "https://www.instagram.com/gabrielaalvim.terapeuta/",
+  );
+
+  await page.getByRole("link", { name: "Área da profissional" }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/login");
+  await expect(page.getByRole("heading", { name: "Administração" })).toBeVisible();
 });
 
 test("redireciona o acesso administrativo de serviços para o login", async ({ page }) => {

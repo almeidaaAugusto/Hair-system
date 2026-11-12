@@ -10,6 +10,8 @@ import {
   performAdminLogout,
 } from "@/features/admin-auth/admin-session-workflows";
 import { getSessionClientAuth } from "@/features/admin-services/firebase-client";
+import { BrandMark } from "@/features/brand/brand-mark";
+import { brand } from "@/lib/brand";
 
 const LOGOUT_ERROR_MESSAGE = "Não foi possível sair. Tente novamente.";
 
@@ -43,6 +45,10 @@ export function AdminNavigation() {
   return (
     <>
       <nav className="admin-nav" aria-label="Administração">
+        <span className="admin-brand">
+          <BrandMark className="admin-brand-mark" />
+          {brand.name}
+        </span>
         <div className="admin-nav-links">
           <Link
             aria-current={pathname === "/admin/agenda" ? "page" : undefined}
