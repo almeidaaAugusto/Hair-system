@@ -24,6 +24,25 @@ afterAll(async () => {
 });
 
 describe("firestore rules", () => {
+  it.each(["appointments", "timeBlocks", "appointmentDayLocks"])(
+    "denies direct agenda access to %s for public clients and authenticated admins",
+    async (collection) => {
+      const contexts = [
+        testEnvironment.unauthenticatedContext(),
+        testEnvironment.authenticatedContext("admin-agenda", {
+          admin: true,
+          salonId: "salon-agenda",
+        }),
+      ];
+      for (const context of contexts) {
+        const reference = context.firestore().doc(`${collection}/denied-access`);
+        await assertFails(reference.get());
+        await assertFails(reference.set({ salonId: "salon-agenda" }));
+        await assertFails(reference.delete());
+      }
+    },
+  );
+
   it("nega leituras públicas durante a fundação", async () => {
     await assertFails(
       testEnvironment.unauthenticatedContext().firestore().doc("appointments/test").get(),

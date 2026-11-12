@@ -13,7 +13,7 @@ export type BusinessHoursRepository = {
   save(salonId: string, professionalId: string, input: BusinessHoursInput): Promise<BusinessHours>;
 };
 
-function documentId(salonId: string, professionalId: string): string {
+export function businessHoursDocumentId(salonId: string, professionalId: string): string {
   return Buffer.from(JSON.stringify([salonId, professionalId])).toString("base64url");
 }
 
@@ -21,7 +21,9 @@ export function createFirestoreBusinessHoursRepository(
   firestore: Firestore = getFirestore(getAdminApp()),
 ): BusinessHoursRepository {
   function reference(salonId: string, professionalId: string) {
-    return firestore.collection("businessHours").doc(documentId(salonId, professionalId));
+    return firestore
+      .collection("businessHours")
+      .doc(businessHoursDocumentId(salonId, professionalId));
   }
 
   return {

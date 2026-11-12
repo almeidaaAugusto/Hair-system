@@ -75,6 +75,8 @@ Um lock diário determinístico por `[salonId, primary, localDate]` contém iden
 
 A reserva relê serviço, configuração, lock e ocupações dentro da transação. Todas as leituras precedem as escritas. O callback pode repetir: não gerar efeitos externos nele. Cancelamentos não relêem o catálogo para reconstruir snapshots. Validar identidade também em documentos persistidos. Documento de outro salão é indistinguível de inexistente.
 
+Ordem comum: aguardar a leitura do lock diário antes de ler qualquer outro documento na transação, sem agrupá-lo com outras leituras em `Promise.all`. Cancelamentos podem fazer uma leitura externa apenas para localizar o dia; dentro da transação leem primeiro o lock, depois releem o alvo e conferem salão, profissional e data imutável antes de escrever. Isso evita inversão de ordem entre cancelamento e criação. Testes não devem presumir ordem de commits apenas porque a leitura de um lock resolveu: resultados concorrentes precisam corresponder a alguma execução serial válida.
+
 Consultas diárias por `salonId`, `professionalId`, `localDate` e ordenação de `startAt`; adicionar índices para ambas as coleções. Essa partição depende da regra de ocupação/bloqueio caberem no dia local. Reutilizar/exportar o identificador já existente de businessHours, sem duplicar sua convenção.
 
 ## API
