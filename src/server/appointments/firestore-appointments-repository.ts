@@ -186,8 +186,11 @@ export function createFirestoreAppointmentsRepository(
     fingerprint: string,
     decode: Decoder<T>,
   ): T {
-    scopedData(snapshot, scope);
-    if (snapshot.data()?.fingerprint !== fingerprint) {
+    const data = snapshot.data();
+    if (data?.salonId !== scope.salonId || data.professionalId !== DEFAULT_PROFESSIONAL_ID)
+      notFound();
+    // Compare content before decoding the date: a changed date is an idempotency conflict.
+    if (data.fingerprint !== fingerprint) {
       throw new AppointmentRuleError(
         "IDEMPOTENCY_CONFLICT",
         "A chave de requisição já foi utilizada com outro conteúdo.",
@@ -284,15 +287,6 @@ export function createFirestoreAppointmentsRepository(
         const guard = await readGuard(transaction, scope);
         const existing = await transaction.get(reference);
         if (existing.exists) {
-          // Check ownership before fingerprints; a different date with this request is a conflict.
-          const data = existing.data();
-          if (data?.salonId !== salonId || data.professionalId !== DEFAULT_PROFESSIONAL_ID)
-            notFound();
-          if (data.fingerprint !== fingerprint)
-            throw new AppointmentRuleError(
-              "IDEMPOTENCY_CONFLICT",
-              "A chave de requisição já foi utilizada com outro conteúdo.",
-            );
           return {
             appointment: replay(existing, scope, fingerprint, decodeAppointment),
             replayed: true,
@@ -331,14 +325,6 @@ export function createFirestoreAppointmentsRepository(
         const guard = await readGuard(transaction, scope);
         const existing = await transaction.get(reference);
         if (existing.exists) {
-          const data = existing.data();
-          if (data?.salonId !== salonId || data.professionalId !== DEFAULT_PROFESSIONAL_ID)
-            notFound();
-          if (data.fingerprint !== fingerprint)
-            throw new AppointmentRuleError(
-              "IDEMPOTENCY_CONFLICT",
-              "A chave de requisição já foi utilizada com outro conteúdo.",
-            );
           return {
             timeBlock: replay(existing, scope, fingerprint, decodeTimeBlock),
             replayed: true,
