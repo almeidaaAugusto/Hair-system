@@ -11,3 +11,4 @@ firestore-debug.log
 *.local
 .env*.local
 Levantamento de requisitos*.csv
+next-env.d.ts
