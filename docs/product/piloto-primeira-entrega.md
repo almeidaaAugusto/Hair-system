@@ -29,7 +29,7 @@ Colocar o painel administrativo nas mãos da profissional por 1–2 semanas de u
 1. Revisar e integrar o código (branch e PR) e publicar na Vercel.
 2. Definir o projeto Firebase do piloto. Como serão dados reais de clientes, preferir um projeto separado do usado em testes manuais.
 3. Na Vercel, configurar `FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID` e `FIREBASE_SERVICE_ACCOUNT_JSON` (privada).
-   As duas variáveis do servidor e as três públicas devem apontar para o **mesmo** projeto Firebase do piloto (`hair-sys-piloto`); confira o `project_id` dentro do JSON da conta de serviço.
+   As duas variáveis do servidor e as três públicas devem apontar para o **mesmo** projeto Firebase de produção; confira o `project_id` dentro do JSON da conta de serviço.
 4. Publicar regras e índices: `npx firebase deploy --only firestore:rules,firestore:indexes --project <projeto>`. Sem os índices, a agenda não carrega.
 5. Criar a conta da profissional em Firebase Authentication e liberar o acesso: `npm run firebase:set-admin -- email@exemplo.com <id-do-salao>`.
 6. Abrir o sistema no celular dela, entrar uma vez e adicionar o endereço à tela inicial.
