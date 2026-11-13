@@ -5,7 +5,7 @@ Memória compartilhada entre sessões e agentes. Leia antes de começar; atualiz
 ## Estado atual
 
 - **Marco:** fechamento do piloto ([piloto-primeira-entrega.md](../product/piloto-primeira-entrega.md)) — painel administrativo em uso real pela profissional antes da página pública.
-- **Código:** endurecimento do piloto concluído e verificado na branch `feat/pilot-hardening` (commits `8e399e8`, `2838029`, `e61d16a`); ainda **não** integrado ao `main` nem publicado.
+- **Código:** endurecimento do piloto integrado ao `main` do `origin` (`df11027`) e publicado em produção em 2026-11-13.
 - **Produção:** login, Agenda e Serviços verificados funcionando em 2026-11-13 (sem dados cadastrados ainda).
 
 ## Ambientes
@@ -18,18 +18,23 @@ Memória compartilhada entre sessões e agentes. Leia antes de começar; atualiz
 
 - Não criar novos projetos Firebase/Vercel nem novos bancos.
 - Repositório: `origin` = fork usado no deploy; `upstream` (DiegoGM55) está atrás e não é usado no deploy.
-- Índices do Firestore publicados em produção. Regras: republicar junto com o próximo deploy.
+- Índices e regras do Firestore publicados em produção (regras republicadas em 2026-11-13).
 - Emuladores exigem JDK 21+ (Temurin 21 instalado em 2026-11-13).
 
 ## Próximos passos
 
-1. Merge de `feat/pilot-hardening` no `main` do `origin` (dispara o deploy de produção).
-2. Publicar regras do Firestore em `hair-sys-piloto`.
-3. Criar a conta da profissional no Firebase Auth de produção e aplicar as claims (`npm run firebase:set-admin`).
-4. Smoke test em produção: salvar expediente, criar e cancelar um agendamento de teste, conferir logs da Vercel (sem 403/500).
-5. Entrega no celular dela e cadastro dos serviços reais; coletar feedback (perguntas no doc do piloto).
+1. Smoke test de mutações em produção: salvar expediente, criar e cancelar um agendamento de teste (confirma a checagem de Origin atrás da Vercel).
+2. Conta da profissional no Firebase Auth de produção com claims `admin` + `salonId` (mesmo `salonId` da conta já usada) via `npm run firebase:set-admin`.
+3. Entrega no celular dela e cadastro dos serviços reais; coletar feedback (perguntas no doc do piloto).
 
 ## Log
+
+### 2026-11-13 — Deploy do endurecimento em produção
+
+- **O que:** `feat/pilot-hardening` integrada ao `main` (fast-forward) e publicada; regras do Firestore publicadas em `hair-sys-piloto`.
+- **Onde:** `origin/main` = `df11027`; deploy Vercel de produção pronto.
+- **Verificação:** headers `frame-ancestors`, `X-Frame-Options`, `Referrer-Policy`, `nosniff` presentes em https://gabrielaalvim.vercel.app/; API admin sem login responde 401.
+- **Pendências:** smoke test de mutações; conta da profissional.
 
 ### 2026-11-13 — Produção verificada e diário de progresso criado
 
