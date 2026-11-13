@@ -48,10 +48,12 @@ import {
   createDefaultBusinessHoursInput,
 } from "@/domain/business-hours/business-hours";
 import { createServiceSchema } from "@/domain/services/service";
+import { resolveReservationClient } from "@/server/clients/client-documents";
 import { businessHoursDocumentId } from "@/server/business-hours/business-hours-repository";
 import { getAdminApp } from "@/server/firebase/admin";
 import type { AppointmentsRepository } from "./appointments-repository";
 
+const MAX_CLIENT_APPOINTMENTS = 500;
 type Scope = { salonId: string; localDate: string };
 type AgendaRecord = Appointment | TimeBlock;
 type Decoder<T> = (snapshot: DocumentSnapshot, scope: Scope) => T;
@@ -412,6 +414,14 @@ export function createFirestoreAppointmentsRepository(
             replayed: true,
           };
         }
+        // All reads (client, service, hours, day) happen before the first write.
+        const target = input.clientId ? { clientId: input.clientId } : { client: input.client! };
+        const resolved = await resolveReservationClient(
+          firestore,
+          transaction,
+          { salonId, userId, now },
+          target,
+        );
         const context = await readServiceAndHours(salonId, input.serviceId, transaction);
         const occupation = await readDay(scope, transaction);
         const appointment = buildAppointment({
@@ -419,14 +429,35 @@ export function createFirestoreAppointmentsRepository(
           salonId,
           userId,
           input,
+          client: { name: resolved.name, phone: resolved.phone },
+          clientId: resolved.clientId,
           ...context,
           ...occupation,
           now,
         });
+        resolved.commit();
         transaction.create(reference, storedRecord(appointment, fingerprint));
         writeGuard(transaction, guard, scope, now);
         return { appointment, replayed: false };
       });
+    },
+
+    async listByClient(salon, clientValue) {
+      const salonId = documentIdSchema.parse(salon);
+      const clientId = documentIdSchema.parse(clientValue);
+      const snapshot = await firestore
+        .collection("appointments")
+        .where("salonId", "==", salonId)
+        .where("clientId", "==", clientId)
+        .orderBy("startAt", "desc")
+        .limit(MAX_CLIENT_APPOINTMENTS)
+        .get();
+      return snapshot.docs.map((document) =>
+        decodeAppointment(document, {
+          salonId,
+          localDate: localDateSchema.parse(document.get("localDate")),
+        }),
+      );
     },
 
     cancel: (salonId, userId, id) =>

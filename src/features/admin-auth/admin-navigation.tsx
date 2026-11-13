@@ -57,6 +57,12 @@ export function AdminNavigation() {
             Agenda
           </Link>
           <Link
+            aria-current={pathname.startsWith("/admin/clients") ? "page" : undefined}
+            href="/admin/clients"
+          >
+            Clientes
+          </Link>
+          <Link
             aria-current={pathname === "/admin/services" ? "page" : undefined}
             href="/admin/services"
           >

@@ -16,6 +16,12 @@ let adminAuth: Auth;
 let firestore: Firestore;
 let userId: string | undefined;
 
+/** A fresh mobile number per booking: the phone identifies the client record. */
+function uniquePhone(): string {
+  const digits = String(Math.floor(10_000_000 + Math.random() * 89_999_999));
+  return `(11) 9${digits.slice(0, 4)}-${digits.slice(4)}`;
+}
+
 /** A Monday at least a week ahead: inside the default Monday–Saturday hours. */
 function upcomingMonday(): string {
   const date = new Date();
@@ -64,7 +70,14 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   if (!app) return;
   try {
-    for (const collection of ["services", "appointments", "timeBlocks", "appointmentDayLocks"]) {
+    for (const collection of [
+      "services",
+      "appointments",
+      "timeBlocks",
+      "appointmentDayLocks",
+      "clients",
+      "clientPhones",
+    ]) {
       const documents = await firestore
         .collection(collection)
         .where("salonId", "==", salonId)
@@ -96,8 +109,8 @@ test("books, views, cancels and blocks time from the administrative agenda", asy
   await page.getByLabel("Serviço").selectOption(serviceId);
   await page.getByLabel("Data", { exact: true }).fill(date);
   await page.getByLabel("Início").selectOption({ label: "09:00" });
-  await page.getByLabel("Nome da cliente").fill(clientName);
   await page.getByLabel("Telefone (WhatsApp)").fill("(11) 98888-7777");
+  await page.getByLabel("Nome da cliente").fill(clientName);
   await page.getByRole("button", { name: "Confirmar agendamento" }).click();
 
   await expect(
@@ -106,6 +119,8 @@ test("books, views, cancels and blocks time from the administrative agenda", asy
   const item = page.getByRole("listitem").filter({ hasText: clientName });
   await expect(item).toContainText("09:00–10:00");
   await expect(item).toContainText(serviceName);
+  // The stored phone is canonical (with 55); the agenda shows it masked, without the country code.
+  await expect(item).toContainText("(11) 98888-7777");
   await expect(item.getByRole("link", { name: "Abrir conversa" })).toHaveAttribute(
     "href",
     "https://wa.me/5511988887777",
@@ -163,8 +178,8 @@ async function book(page: Page, day: string, time: string, name: string) {
   await page.getByLabel("Serviço").selectOption(serviceId);
   await page.getByLabel("Data", { exact: true }).fill(day);
   await page.getByLabel("Início").selectOption({ label: time });
+  await page.getByLabel("Telefone (WhatsApp)").fill(uniquePhone());
   await page.getByLabel("Nome da cliente").fill(name);
-  await page.getByLabel("Telefone (WhatsApp)").fill("(11) 98888-7777");
   await page.getByRole("button", { name: "Confirmar agendamento" }).click();
   // Wait for this booking's own confirmation, not a message left by a previous one.
   await expect(
@@ -290,8 +305,8 @@ test("books outside business hours only after confirming the exception", async (
   // 06:00 is before the default opening time and is not offered in the free list.
   await page.getByLabel("Outro horário (digitar)").check();
   await page.getByLabel("Horário de início").fill("06:00");
+  await page.getByLabel("Telefone (WhatsApp)").fill(uniquePhone());
   await page.getByLabel("Nome da cliente").fill(client);
-  await page.getByLabel("Telefone (WhatsApp)").fill("(11) 98888-7777");
   await page.getByRole("button", { name: "Confirmar agendamento" }).click();
 
   const warning = page

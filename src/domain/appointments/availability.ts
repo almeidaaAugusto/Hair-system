@@ -263,9 +263,17 @@ function planSlot(
 }
 
 export function buildAppointment(
-  command: CommandContext & ServiceContext & { input: CreateAppointmentInput },
+  command: CommandContext &
+    ServiceContext & {
+      input: CreateAppointmentInput;
+      /** Snapshot resolved from the client record; defaults to `input.client`. */
+      client?: { name: string; phone: string };
+      clientId?: string;
+    },
 ): Appointment {
   const input = createAppointmentInputSchema.parse(command.input);
+  const client = command.client ?? input.client;
+  if (!client) throw new TypeError("A client snapshot is required.");
   if (command.service.salonId !== command.salonId || command.service.id !== input.serviceId) {
     throw new AppointmentRuleError("NOT_FOUND", "Serviço não encontrado.");
   }
@@ -279,7 +287,8 @@ export function buildAppointment(
       allowExceptions: input.allowExceptions === true,
     }),
     status: "confirmed",
-    client: input.client,
+    ...(command.clientId === undefined ? {} : { clientId: command.clientId }),
+    client,
     source: input.source,
     createdBy: command.userId,
     updatedBy: command.userId,

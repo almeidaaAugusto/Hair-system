@@ -52,3 +52,23 @@
 ## Decisões confirmadas pelos documentos de requisitos
 
 Não há antecedência mínima ou máxima artificial. A profissional efetiva cancelamentos. Bloqueios são manuais e simples, inclusive de dia inteiro; recorrência e férias não fazem parte deste marco. Cadastro separado de clientes fica para entregas futuras. A interface administrativa da agenda (dia, semana, mês, criação manual, bloqueio e cancelamento) foi entregue em 2026-11-12; serviços que exigem avaliação não são confirmados automaticamente; porém, no cadastro manual, a profissional pode registrar a exceção explicitamente (agendamento `confirmed` por decisão humana, com `exceptions` registrado; ver `docs/product/business-rules.md`). O fluxo público de avaliação segue em aberto.
+
+## Cadastro de clientes: fora do escopo do marco
+
+Registradas em 2026-11-13; precisam de decisão antes de entrar em um próximo marco.
+
+- Foto do cabelo na ficha (armazenamento, formatos, retenção; ver pergunta 3).
+- Exclusão ou anonimização de ficha e retenção de dados pessoais (LGPD; ver pergunta 15). Hoje fichas não podem ser apagadas.
+- Exportação das fichas.
+- Mesclagem de fichas duplicadas (por exemplo, a cliente trocou de número e já existem duas fichas).
+- Mais de uma ficha por telefone (por exemplo, mãe e filha que compartilham o número).
+- Mensagem automática de aniversário (depende da pergunta 13, WhatsApp).
+- Tratamento do "nono dígito" antigo de celulares brasileiros: hoje números com e sem o 9 extra são fichas diferentes.
+- Troca de telefone preserva o histórico de agendamentos (ligados por `clientId`), mas o snapshot de telefone dos agendamentos antigos continua o antigo, de propósito.
+
+### Limites do cadastro de clientes
+
+- O histórico de atendimentos da ficha mostra até 500 atendimentos (os mais recentes); o resumo é calculado sobre esse mesmo conjunto.
+- A lista de clientes traz até 2000 fichas por salão; a busca é feita no navegador.
+- Uma guarda de telefone órfã (aponta para uma ficha inexistente) é tratada como ficha não encontrada (NOT_FOUND) na busca por telefone e na reserva; não há reparo automático.
+- A busca por telefone (`lookup`) devolve apenas `id` e `name`, para não expor observações e histórico químico no formulário de agendamento.

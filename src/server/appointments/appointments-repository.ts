@@ -44,6 +44,8 @@ export type AppointmentsRepository = {
     userId: string,
     input: CreateAppointmentInput,
   ): Promise<ReserveAppointmentResult>;
+  /** Appointments of a client, most recent first (includes cancelled ones). */
+  listByClient(salonId: string, clientId: string): Promise<Appointment[]>;
   cancel(salonId: string, userId: string, appointmentId: string): Promise<Appointment>;
   complete(
     salonId: string,

@@ -122,12 +122,15 @@ describe("agenda helpers", () => {
   it("builds WhatsApp links with the Brazilian country code when missing", () => {
     expect(getWhatsAppUrl("11999999999")).toBe("https://wa.me/5511999999999");
     expect(getWhatsAppUrl("5511999999999")).toBe("https://wa.me/5511999999999");
+    expect(getWhatsAppUrl("+55 (11) 99999-9999")).toBe("https://wa.me/5511999999999");
   });
 
   it("formats Brazilian phone numbers", () => {
     expect(formatPhone("11999999999")).toBe("(11) 99999-9999");
     expect(formatPhone("1133334444")).toBe("(11) 3333-4444");
-    expect(formatPhone("5511999999999")).toBe("5511999999999");
+    expect(formatPhone("5511999999999")).toBe("(11) 99999-9999");
+    expect(formatPhone("551133334444")).toBe("(11) 3333-4444");
+    expect(formatPhone("+55 (11) 99999-9999")).toBe("(11) 99999-9999");
   });
 
   it("maps rule codes to friendly messages and falls back safely", () => {

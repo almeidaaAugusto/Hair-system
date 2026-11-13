@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import type { Appointment, TimeBlock } from "@/domain/appointments/appointment";
@@ -286,6 +287,14 @@ function DayAgenda({
               >
                 Abrir conversa
               </a>
+              {appointment.clientId ? (
+                <Link
+                  className="link-button"
+                  href={`/admin/clients/${encodeURIComponent(appointment.clientId)}`}
+                >
+                  Ver ficha
+                </Link>
+              ) : null}
             </div>
             {editing === "reschedule" ? (
               <RescheduleForm

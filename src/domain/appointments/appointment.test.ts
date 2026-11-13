@@ -26,8 +26,23 @@ describe("appointment inputs", () => {
       createAppointmentInputSchema.parse({
         ...input,
         client: { name: "A", phone: "(11) 99999-1234" },
-      }).client.phone,
+      }).client?.phone,
     ).toBe("11999991234");
+  });
+
+  it("requires exactly one of clientId or client", () => {
+    const { client, ...base } = input;
+    expect(createAppointmentInputSchema.safeParse({ ...base, clientId: "client-1" }).success).toBe(
+      true,
+    );
+    expect(createAppointmentInputSchema.safeParse({ ...base, client }).success).toBe(true);
+    expect(createAppointmentInputSchema.safeParse(base).success).toBe(false);
+    expect(
+      createAppointmentInputSchema.safeParse({ ...base, client, clientId: "client-1" }).success,
+    ).toBe(false);
+    expect(createAppointmentInputSchema.safeParse({ ...base, clientId: "a/b" }).success).toBe(
+      false,
+    );
   });
 
   it.each([

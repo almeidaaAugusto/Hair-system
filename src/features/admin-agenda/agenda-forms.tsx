@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useForm, useWatch, type UseFormRegisterReturn } from "react-hook-form";
 
@@ -8,6 +9,14 @@ import type { AvailabilityWindow } from "@/domain/appointments/availability";
 import { getLocalDayBounds } from "@/domain/appointments/local-date";
 import type { Service } from "@/domain/services/service";
 import { fetchAdmin } from "@/features/admin-auth/admin-api-client";
+import {
+  needsClientName,
+  resolveBookingAttempt,
+  resolveClientReference,
+  type BookingAttempt,
+  type ClientLookupState,
+} from "@/features/admin-clients/client-booking";
+import { useClientLookup } from "@/features/admin-clients/use-client-lookup";
 import { UserMessageError, toUserMessage } from "@/features/shared/user-message";
 import { formatBrazilianReal } from "@/features/admin-services/money";
 
@@ -273,9 +282,46 @@ type AppointmentFormProps = {
 type AppointmentPayload = {
   serviceId: string;
   startAt: string;
-  client: { name: string; phone: string };
   source: "manual" | "whatsapp";
-};
+} & ({ clientId: string } | { client: { name: string; phone: string } });
+
+/** Phone-first client identification: shows the matched client or asks for the name. */
+function ClientLookupNotice({ lookup }: { lookup: ClientLookupState }) {
+  if (lookup.status === "loading")
+    return (
+      <p className="agenda-hint" role="status">
+        Buscando cliente pelo telefone…
+      </p>
+    );
+  if (lookup.status === "found")
+    return (
+      <p className="agenda-hint" role="status">
+        <strong>Cliente: {lookup.name}</strong>{" "}
+        <Link
+          className="link-button"
+          href={`/admin/clients/${encodeURIComponent(lookup.clientId)}`}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          Ver ficha
+        </Link>
+      </p>
+    );
+  if (lookup.status === "error")
+    return (
+      <p className="agenda-hint" role="status">
+        Não foi possível consultar a cliente. Informe o nome para continuar; a ficha é ligada pelo
+        telefone ao salvar.
+      </p>
+    );
+  if (lookup.status === "not_found")
+    return (
+      <p className="agenda-hint" role="status">
+        Cliente nova: informe o nome para criar a ficha.
+      </p>
+    );
+  return null;
+}
 
 export function AppointmentForm({ defaultDate, onCancel, onCreated }: AppointmentFormProps) {
   const form = useForm<AppointmentFields>({
@@ -294,6 +340,9 @@ export function AppointmentForm({ defaultDate, onCancel, onCreated }: Appointmen
   const serviceId = useWatch({ control, name: "serviceId" });
   const date = useWatch({ control, name: "date" });
   const useCustomTime = useWatch({ control, name: "useCustomTime" });
+  const phone = useWatch({ control, name: "phone" });
+  const lookup = useClientLookup(phone);
+  const showName = needsClientName(phone, lookup);
   const { services, error: servicesError } = useBookableServices();
   const { availability, queryKey, refresh } = useAvailability(serviceId, date);
   const [message, setMessage] = useState<string>();
@@ -301,8 +350,9 @@ export function AppointmentForm({ defaultDate, onCancel, onCreated }: Appointmen
   const [pending, setPending] = useState<
     PendingOverride<AppointmentPayload> & { formKey: string }
   >();
-  // One key per form opening: a retried submission after a lost response replays safely.
-  const [requestId] = useState(() => crypto.randomUUID());
+  // The request id and client reference of the last submission: an unchanged form
+  // retried after a lost response replays with the exact same request.
+  const [attempt, setAttempt] = useState<BookingAttempt>();
 
   useEffect(() => {
     setValue("startAt", "");
@@ -357,14 +407,25 @@ export function AppointmentForm({ defaultDate, onCancel, onCreated }: Appointmen
       setMessage(start.error);
       return;
     }
+    const resolved = resolveBookingAttempt(
+      attempt,
+      formKey,
+      () => resolveClientReference({ phone: fields.phone, name: fields.name, lookup }),
+      () => crypto.randomUUID(),
+    );
+    if ("error" in resolved) {
+      setMessage(resolved.error);
+      return;
+    }
+    setAttempt(resolved.attempt);
     await send(
       {
         serviceId: fields.serviceId,
         startAt: start.startAt,
-        client: { name: fields.name, phone: fields.phone },
+        ...resolved.attempt.reference,
         source: fields.source,
       },
-      requestId,
+      resolved.attempt.requestId,
       false,
     );
   }
@@ -415,10 +476,6 @@ export function AppointmentForm({ defaultDate, onCancel, onCreated }: Appointmen
       />
       <div className="agenda-form-grid">
         <label>
-          Nome da cliente
-          <input autoComplete="off" maxLength={120} required {...form.register("name")} />
-        </label>
-        <label>
           Telefone (WhatsApp)
           <input
             autoComplete="off"
@@ -428,7 +485,14 @@ export function AppointmentForm({ defaultDate, onCancel, onCreated }: Appointmen
             {...form.register("phone")}
           />
         </label>
+        {showName ? (
+          <label>
+            Nome da cliente
+            <input autoComplete="off" maxLength={120} required {...form.register("name")} />
+          </label>
+        ) : null}
       </div>
+      <ClientLookupNotice lookup={lookup} />
       <fieldset className="agenda-source">
         <legend>Origem</legend>
         <label>

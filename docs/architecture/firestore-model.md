@@ -87,3 +87,19 @@ Os estados operacionais são `confirmed → completed | no_show | cancelled`; co
 O pagamento fica embutido no atendimento (`payment`), sem a coleção `paymentRecords` neste marco: valor final, valor pago (nunca maior que o final) e forma (`pix`, `cash`, `debit`, `credit`, obrigatória quando há valor pago). O saldo e o status financeiro (`not_recorded`, `unpaid`, `partial`, `paid`) são derivados, nunca gravados. Registrar novamente substitui o pagamento anterior (correção). O total recebido soma apenas atendimentos concluídos e integralmente pagos (RN-12).
 
 Esses comandos não alteram a ocupação do dia, por isso a transação lê e grava apenas o documento do atendimento; um cancelamento simultâneo também grava esse documento, e o Firestore serializa os dois.
+
+## Cadastro de clientes implementado
+
+`clients/{clientId}` (id gerado pelo servidor; também derivado de SHA-256 do salão e do `requestId` quando criado pela API): `salonId`, `name` (1–120), `phone` (telefone canônico, ver abaixo), `instagram?` (sem `@`, minúsculo, `[a-z0-9._]{1,30}`), `birthday? { day, month, year? }`, `notes?` (até 2000), `chemicalHistory[]` (até 100 itens `{ id, localDate, procedure, product?, notes? }`, mais recente primeiro), `createdAt`, `updatedAt`, `createdBy`, `updatedBy` e `fingerprint` (idempotência de criação; nunca exposto). Foto, exclusão/anonimização, exportação e mesclagem estão fora do marco.
+
+`clientPhones/{sha256(salonId + ":" + phone)}` → `{ salonId, clientId, phone }`: guarda de unicidade. É criada junto com a ficha (criação pela API, pela reserva ou pela migração) e, na troca de telefone, a guarda antiga é removida e a nova criada na mesma transação. Um telefone pertence a no máximo uma ficha por salão.
+
+Telefone canônico (`normalizeBrazilianPhone`): só dígitos; 10 ou 11 dígitos recebem o prefixo `55`; 12 a 15 dígitos são mantidos; qualquer outro tamanho é inválido. Não há tratamento do "nono dígito" antigo.
+
+`appointments.clientId` liga o atendimento à ficha (opcional somente na leitura, por causa de documentos anteriores à migração; toda gravação nova o inclui). O snapshot `client { name, phone }` continua gravado e não é reescrito quando a ficha muda; ao reservar, o snapshot usa nome e telefone atuais da ficha (telefone canônico). Reagendar e trocar de serviço não alteram `clientId`.
+
+A reserva por `client { name, phone }` lê a guarda dentro da própria transação, depois da trava do dia e antes de qualquer escrita; se não houver guarda, cria ficha e guarda na mesma transação do atendimento. Duas reservas simultâneas do mesmo telefone novo resultam em uma única ficha (o Firestore serializa a criação da guarda).
+
+Índices novos: `appointments` (`salonId` ASC, `clientId` ASC, `startAt` DESC) para o histórico da ficha e `clients` (`salonId` ASC, `name` ASC) para a lista. Regras: `clients` e `clientPhones` são negados ao navegador (regra padrão, com teste explícito); todo acesso passa pelas rotas `/api/admin/clients/**`.
+
+Migração: `scripts/migrate-clients.mjs` (simulação por padrão, `--apply` grava, idempotente, só contagens na saída).

@@ -112,3 +112,21 @@ A página administrativa da agenda consome somente as APIs acima:
 - Quando o horário muda, lembrete e confirmação são removidos e voltam a ficar pendentes; trocar só o serviço no mesmo horário os mantém.
 - Mensagens prontas (RF-COM-01/05): confirmação (serviço, data, horário, duração e preço "a partir de" quando variável), lembrete e pós-atendimento. Nada é enviado automaticamente; a profissional revisa e envia no WhatsApp.
 - Após o login, o painel abre na Agenda.
+
+## Migração de clientes
+
+`scripts/migrate-clients.mjs` liga os agendamentos existentes às fichas de cliente, agrupando por telefone canônico. A credencial vem apenas do Application Default Credentials: aponte `GOOGLE_APPLICATION_CREDENTIALS` para a chave de conta de serviço do projeto desejado e informe `FIREBASE_PROJECT_ID`. O script imprime primeiro o projeto, o modo e (se houver) o emulador; só depois lê dados. A saída tem apenas contagens, nunca nomes ou telefones.
+
+Comandos (substitua o caminho da chave, o projeto e o `salonId` das claims da administradora):
+
+```bash
+# Simulação (padrão, não grava). Testes: hair-sys; produção: hair-sys-piloto.
+GOOGLE_APPLICATION_CREDENTIALS=<caminho da chave> FIREBASE_PROJECT_ID=hair-sys \
+  node scripts/migrate-clients.mjs --salon <salonId>
+
+# Aplicar: exige --confirm-project idêntico ao projeto, senão aborta sem ler nem gravar.
+GOOGLE_APPLICATION_CREDENTIALS=<caminho da chave> FIREBASE_PROJECT_ID=hair-sys \
+  node scripts/migrate-clients.mjs --salon <salonId> --apply --confirm-project hair-sys
+```
+
+Fluxo: simular, conferir as contagens (agendamentos lidos, fichas a criar, agendamentos a ligar, ignorados por telefone inválido), aplicar e reaplicar esperando zero fichas criadas e zero agendamentos ligados. Rode primeiro no banco de testes (`hair-sys`); em produção (`hair-sys-piloto`) só com confirmação explícita do usuário e com os índices novos já publicados. Nunca rode contra produção com um `salonId` não conferido.

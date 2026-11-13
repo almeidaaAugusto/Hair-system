@@ -37,12 +37,18 @@ export const createAppointmentInputSchema = z
     requestId: z.uuid(),
     serviceId: documentIdSchema,
     startAt: utcMinuteSchema,
-    client: clientSchema,
+    /** Either an existing client record or the data used to find/create one by phone. */
+    clientId: documentIdSchema.optional(),
+    client: clientSchema.optional(),
     source: z.enum(["manual", "whatsapp"]),
     /** Administrative override of business hours and the evaluation restriction. */
     allowExceptions: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .refine((input) => (input.clientId === undefined) !== (input.client === undefined), {
+    message: "Informe clientId ou client, mas não ambos.",
+    path: ["client"],
+  });
 
 export const createTimeBlockInputSchema = z
   .object({
@@ -144,6 +150,9 @@ export const appointmentSchema = z
     paymentUpdatedAt: utcInstantSchema.optional(),
     reminderSentAt: utcInstantSchema.optional(),
     clientConfirmedAt: utcInstantSchema.optional(),
+    /** Absent only in appointments created before the client registry. */
+    clientId: documentIdSchema.optional(),
+    /** Name and phone as agreed when booked; never rewritten when the client record changes. */
     client: clientSchema,
     serviceSnapshot: createServiceSchema
       .omit({ isActive: true })

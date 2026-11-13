@@ -13,22 +13,29 @@ Memória compartilhada entre sessões e agentes. Leia antes de começar; atualiz
 | Ambiente | Firebase              | Onde                                                                                                |
 | -------- | --------------------- | --------------------------------------------------------------------------------------------------- |
 | Produção | `hair-sys-piloto`     | https://gabrielaalvim.vercel.app/ (projeto Vercel `hair-system`, deploy do `main` do fork `origin`) |
-| Testes   | `hair-sys`            | `.env.local` de desenvolvimento                                                                     |
+| Testes   | `hair-sys`            | `.env.local` e links de Preview da Vercel                                                           |
 | Local/CI | `demo-sistema-cabelo` | Firebase Emulator Suite (`npm run test:integration`, `npm run test:e2e:auth`)                       |
 
 - Não criar novos projetos Firebase/Vercel nem novos bancos.
+- Preview da Vercel configurado em 2026-11-13: toda branch ≠ `main` gera um link de Preview ligado ao `hair-sys` (5 variáveis só em Preview); Production mantém as suas 5 variáveis só em Production (`hair-sys-piloto`). Nada a alterar ao publicar: merge no `main` = produção. Para entrar no Preview, usar uma conta admin do Auth do `hair-sys`.
 - Repositório: `origin` = fork usado no deploy; `upstream` (DiegoGM55) está atrás e não é usado no deploy.
 - Índices e regras do Firestore publicados em produção (regras republicadas em 2026-11-13).
 - Emuladores exigem JDK 21+ (Temurin 21 instalado em 2026-11-13).
 
 ## Próximos passos
 
-1. Cadastro de clientes: backend e frontend em implementação (paralelo) → QA gate completo → revisão → merge.
-2. Migração de fichas: simular e aplicar no `hair-sys` (testes), depois em produção com confirmação do usuário.
-3. Usuário configurar variáveis de **Preview** na Vercel apontando para `hair-sys` (separar `FIREBASE_PROJECT_ID` de Production/Preview).
-4. Registrar o feedback da profissional após 1–2 semanas de uso.
+1. Cadastro de clientes: implementado e verificado na branch `feat/client-registry`; validar no link de Preview (banco `hair-sys`).
+2. Antes do merge: publicar índices novos em `hair-sys-piloto` e aguardar o build. Migração: simular e aplicar no `hair-sys`, depois em produção com confirmação do usuário (comandos em [appointments.md](appointments.md#migração-de-clientes)).
+3. Registrar o feedback da profissional após 1–2 semanas de uso.
 
 ## Log
+
+### 2026-11-13 — Cadastro de clientes implementado
+
+- **O que:** fichas de clientes (identidade por telefone canônico com guarda `clientPhones`), histórico químico, aniversário, Instagram, resumo financeiro; agendamento liga/cria ficha na transação; script de migração com simulação e `--confirm-project`; aba Clientes, ficha e telefone-primeiro no agendamento. Correções pós-revisão: projeto/modo impressos antes da migração, lookup só `{id, name}`, reenvio reutiliza a mesma referência.
+- **Onde:** branch `feat/client-registry`; spec [2026-11-13-client-registry-design.md](../superpowers/specs/2026-11-13-client-registry-design.md).
+- **Verificação:** format, lint, typecheck, 515 unitários, 74 integração, build, 4 E2E públicos, 27 E2E autenticados (3 rodadas sem flakiness + rodada final após correções). Revisão: aprovado com ressalvas (todas tratadas ou documentadas).
+- **Pendências:** validar no Preview; índices em produção; migração.
 
 ### 2026-11-13 — Início do marco Cadastro de clientes
 

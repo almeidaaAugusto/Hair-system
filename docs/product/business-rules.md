@@ -80,3 +80,14 @@ A profissional precisa lançar clientes já combinadas pelo WhatsApp, mesmo fora
 - Bloqueios são manuais e simples, podem cobrir um dia inteiro e não podem colidir com ocupações ativas; recorrência e férias ficam para depois.
 - O intervalo completo, inclusive a pausa configurada, cabe no expediente. Reservas confirmadas e bloqueios ativos ocupam períodos semiabertos; cancelados liberam o horário.
 - Serviços inativos ou que exigem avaliação não são confirmados neste comando (salvo pela exceção administrativa abaixo). A reserva guarda nome e telefone como snapshots mínimos, sem cadastro separado de clientes.
+
+## Cadastro de clientes
+
+- **Identidade pelo telefone.** Mesmo telefone, em qualquer formato (com ou sem `55`, com máscara), é a mesma cliente dentro do salão; um telefone pertence a no máximo uma ficha. Criar agendamento com telefone novo cria a ficha; com telefone existente liga à ficha existente, sem duplicar, inclusive em reservas simultâneas.
+- **Agendamento por ficha.** O cadastro manual informa `clientId` (ficha escolhida) ou `client { name, phone }` (a ficha é criada ou reaproveitada pelo telefone), nunca os dois. O nome e o telefone gravados no agendamento são os da ficha no momento da reserva e não mudam se a ficha for editada depois.
+- **Troca de telefone.** Editar o telefone de uma ficha para um já usado por outra é recusado (409 `CLIENT_PHONE_TAKEN`, informando a ficha existente).
+- **Resumo do histórico.** Pago e em aberto consideram somente atendimentos concluídos com pagamento registrado (em aberto = valor final - pago); concluídos sem pagamento registrado não entram nos valores. Faltas e cancelados são contados à parte. Próximo atendimento é o confirmado mais próximo a partir de agora.
+- **Histórico químico.** Até 100 itens por ficha, ordenados do mais recente para o mais antigo pela data do procedimento; remover é definitivo.
+- **Aniversário.** Dia e mês obrigatórios, ano opcional; 29/02 só é aceito sem ano ou com ano bissexto. Instagram é guardado sem `@` e em minúsculas.
+- **Migração.** Agendamentos existentes são agrupados por telefone canônico; o nome da ficha é o do agendamento mais recente do grupo. Agendamentos com telefone inválido ficam sem ficha.
+- **Sem tratamento do "nono dígito" antigo:** números com e sem o 9 extra são fichas diferentes.

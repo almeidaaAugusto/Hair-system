@@ -149,7 +149,9 @@ export function getWhatsAppUrl(phone: string): string {
 }
 
 export function formatPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
+  const all = phone.replace(/\D/g, "");
+  // Canonical phones keep the Brazilian country code; legacy ones may not have it.
+  const digits = /^55\d{10,11}$/.test(all) ? all.slice(2) : all;
   if (digits.length === 11)
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   if (digits.length === 10)

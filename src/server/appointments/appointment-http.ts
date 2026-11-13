@@ -1,5 +1,6 @@
 ﻿import { z } from "zod";
 import { AppointmentRuleError } from "@/domain/appointments/appointment";
+import { ClientRuleError } from "@/domain/clients/client";
 import { AuthorizationError } from "@/server/auth/admin-context";
 import { RequestGuardError, assertJsonContentType } from "@/server/http/request-guards";
 import { logUnexpectedServerError } from "@/server/observability/log-unexpected-server-error";
@@ -57,6 +58,14 @@ export function errorResponse(route: string, error: unknown): Response {
         ...(overridable ? { overridable: true } : {}),
       },
       status,
+    );
+  }
+  if (error instanceof ClientRuleError) {
+    if (error.code === "CLIENT_PHONE_TAKEN")
+      return respond({ error: error.message, code: error.code, clientId: error.clientId }, 409);
+    return respond(
+      { error: "Não foi possível concluir a operação.", code: error.code },
+      error.code === "NOT_FOUND" ? 404 : 409,
     );
   }
   logUnexpectedServerError(route, error);

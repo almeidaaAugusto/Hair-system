@@ -151,12 +151,18 @@ label:has(input[type="radio"]) {
 
 input,
 select,
+textarea,
 button {
   font: inherit;
 }
 
+textarea {
+  resize: vertical;
+}
+
 input:not([type="checkbox"], [type="radio"]),
-select {
+select,
+textarea {
   background: var(--color-surface);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-sm);
@@ -170,12 +176,14 @@ select {
 }
 
 input:not([type="checkbox"], [type="radio"]):hover,
-select:hover {
+select:hover,
+textarea:hover {
   border-color: var(--color-primary);
 }
 
 input:not([type="checkbox"], [type="radio"]):focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-tint);
 }
@@ -753,7 +761,7 @@ select:focus-visible {
   display: grid;
   gap: 0.25rem;
   grid-area: links;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   padding: 0.25rem;
 }
 
@@ -797,7 +805,7 @@ select:focus-visible {
 
   .admin-nav-links {
     justify-self: center;
-    width: min(100%, 24rem);
+    width: min(100%, 32rem);
   }
 }
 
@@ -1831,4 +1839,89 @@ li.is-cancelled {
 
 .agenda-exception p {
   margin: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Clients                                                             */
+/* ------------------------------------------------------------------ */
+.client-search {
+  margin-top: 1rem;
+}
+
+.client-birthday {
+  border: 0;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+}
+
+.client-birthday legend {
+  font-size: 0.95rem;
+  font-weight: 500;
+  margin-bottom: 0.35rem;
+  padding: 0;
+}
+
+.client-section {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+}
+
+.client-section h2,
+.client-section h3 {
+  margin: 0;
+}
+
+.client-section-heading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.client-facts,
+.client-summary {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.client-facts div,
+.client-summary div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.client-facts dt,
+.client-summary dt {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.client-facts dd,
+.client-summary dd {
+  font-weight: 600;
+  margin: 0;
+}
+
+.client-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.client-notes {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+@container (width >= 36rem) {
+  .client-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }

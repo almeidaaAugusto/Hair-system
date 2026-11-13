@@ -53,7 +53,7 @@ const appointment: Appointment = {
   endAt: "2026-11-11T15:00:00.000Z",
   occupiedUntilAt: "2026-11-11T15:10:00.000Z",
   status: "confirmed",
-  client: input.client,
+  client: input.client!,
   serviceSnapshot: {
     serviceId: "cut",
     name: "Corte",
@@ -305,7 +305,7 @@ describe("availability", () => {
 describe("appointment builder", () => {
   it("creates a coherent independent service and client snapshot using injected audit time", () => {
     const mutableService = { ...service };
-    const mutableInput = { ...input, client: { ...input.client } };
+    const mutableInput = { ...input, client: { ...input.client! } };
     const result = buildAppointment({ ...command, service: mutableService, input: mutableInput });
     expect(result).toEqual({
       ...appointment,
