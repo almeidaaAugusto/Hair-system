@@ -4,7 +4,7 @@ Memória compartilhada entre sessões e agentes. Leia antes de começar; atualiz
 
 ## Estado atual
 
-- **Marco:** piloto entregue e em uso pela profissional desde 2026-11-13; coletando feedback ([piloto-primeira-entrega.md](../product/piloto-primeira-entrega.md)). Próximo marco em definição.
+- **Marco:** piloto em uso pela profissional desde 2026-11-13 (coletando feedback). **Em andamento:** cadastro de clientes na branch `feat/client-registry` ([spec](../superpowers/specs/2026-11-13-client-registry-design.md)).
 - **Código:** endurecimento do piloto integrado ao `main` do `origin` (`df11027`) e publicado em produção em 2026-11-13.
 - **Produção:** em uso real (dados reais de clientes). Mudanças só via branch + gate completo + revisão.
 
@@ -23,10 +23,18 @@ Memória compartilhada entre sessões e agentes. Leia antes de começar; atualiz
 
 ## Próximos passos
 
-1. Definir o próximo marco de evolução com o usuário.
-2. Registrar o feedback da profissional ao fim de 1–2 semanas de uso (perguntas no doc do piloto).
+1. Cadastro de clientes: backend e frontend em implementação (paralelo) → QA gate completo → revisão → merge.
+2. Migração de fichas: simular e aplicar no `hair-sys` (testes), depois em produção com confirmação do usuário.
+3. Usuário configurar variáveis de **Preview** na Vercel apontando para `hair-sys` (separar `FIREBASE_PROJECT_ID` de Production/Preview).
+4. Registrar o feedback da profissional após 1–2 semanas de uso.
 
 ## Log
+
+### 2026-11-13 — Início do marco Cadastro de clientes
+
+- **O que:** decisões de produto do usuário: identidade pelo telefone, ficha com observações, histórico químico, aniversário e Instagram, migração automática dos agendamentos existentes. Decidido Preview da Vercel → `hair-sys`.
+- **Onde:** branch `feat/client-registry`, spec `daa2373`.
+- **Pendências:** implementação em andamento.
 
 ### 2026-11-13 — Piloto entregue
 
