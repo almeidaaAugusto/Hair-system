@@ -9,6 +9,10 @@ O fluxo principal é:
 Instagram → página pública → serviço → data e horário →
 dados da cliente → confirmação → agenda administrativa.
 
+## Progresso e continuidade
+
+Antes de qualquer tarefa, leia `docs/development/progress.md` (estado atual, ambientes, próximos passos e log). Ao concluir cada passo relevante, atualize esse diário seguindo a skill `project-progress` (`.claude/skills/project-progress/SKILL.md`). Não crie novos ambientes, projetos Firebase/Vercel ou bancos: os existentes estão listados no diário.
+
 ## Product scope
 
 A primeira versão deve incluir:
