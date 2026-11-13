@@ -398,7 +398,9 @@ export function createFirestoreAppointmentsRepository(
       const input = createAppointmentInputSchema.parse(value);
       const scope = { salonId, localDate: getLocalDate(input.startAt) };
       const id = hash([salonId, "reserve", input.requestId]);
-      const fingerprint = hash(input);
+      // Requests without exceptions keep the fingerprint they always had.
+      const { allowExceptions, ...withoutExceptions } = input;
+      const fingerprint = hash(allowExceptions === true ? input : withoutExceptions);
       const reference = firestore.collection("appointments").doc(id);
       const now = new Date().toISOString();
       return firestore.runTransaction(async (transaction) => {
@@ -482,6 +484,7 @@ export function createFirestoreAppointmentsRepository(
           ...context,
           ...occupation,
           startAt: input.startAt,
+          allowExceptions: input.allowExceptions === true,
           userId,
           now,
         });
@@ -493,6 +496,7 @@ export function createFirestoreAppointmentsRepository(
           "occupiedUntilAt",
           "serviceSnapshot",
           "appointmentIntervalMinutes",
+          "exceptions",
           "reminderSentAt",
           "clientConfirmedAt",
           "updatedAt",

@@ -39,6 +39,8 @@ export const createAppointmentInputSchema = z
     startAt: utcMinuteSchema,
     client: clientSchema,
     source: z.enum(["manual", "whatsapp"]),
+    /** Administrative override of business hours and the evaluation restriction. */
+    allowExceptions: z.boolean().optional(),
   })
   .strict();
 
@@ -74,7 +76,11 @@ export const availabilityQuerySchema = dayQuerySchema.extend({
 
 /** Without serviceId the original service snapshot is kept. */
 export const rescheduleInputSchema = z
-  .object({ startAt: utcMinuteSchema, serviceId: documentIdSchema.optional() })
+  .object({
+    startAt: utcMinuteSchema,
+    serviceId: documentIdSchema.optional(),
+    allowExceptions: z.boolean().optional(),
+  })
   .strict();
 export type RescheduleInput = z.infer<typeof rescheduleInputSchema>;
 
@@ -121,6 +127,10 @@ export const completeAppointmentInputSchema = z
   .object({ payment: paymentSchema.optional() })
   .strict();
 
+export const appointmentExceptions = ["outsideBusinessHours", "requiresEvaluation"] as const;
+export const appointmentExceptionSchema = z.enum(appointmentExceptions);
+export type AppointmentException = z.infer<typeof appointmentExceptionSchema>;
+
 export const appointmentStatuses = ["confirmed", "completed", "no_show", "cancelled"] as const;
 
 export const appointmentSchema = z
@@ -140,6 +150,8 @@ export const appointmentSchema = z
       .extend({ serviceId: documentIdSchema }),
     appointmentIntervalMinutes: z.number().int().min(0),
     source: z.enum(["manual", "whatsapp"]),
+    /** Administrative exceptions actually used; documents without the field mean none. */
+    exceptions: z.array(appointmentExceptionSchema).default([]),
   })
   .strict()
   .refine(
@@ -181,6 +193,8 @@ export type CompleteAppointmentInput = z.infer<typeof completeAppointmentInputSc
 export type AppointmentRuleErrorCode =
   | "NOT_FOUND"
   | "SERVICE_UNAVAILABLE"
+  | "SERVICE_INACTIVE"
+  | "SERVICE_REQUIRES_EVALUATION"
   | "OUTSIDE_BUSINESS_HOURS"
   | "CONFLICT"
   | "IDEMPOTENCY_CONFLICT"

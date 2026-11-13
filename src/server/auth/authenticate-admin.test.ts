@@ -172,4 +172,41 @@ describe("authenticateAdmin", () => {
       authenticateAdmin(new Request("http://localhost/api/admin/services")),
     ).rejects.toMatchObject({ status: 401 });
   });
+
+  it.each(["POST", "PUT", "PATCH", "DELETE"])(
+    "rejects %s without a same-origin Origin before verifying credentials",
+    async (method) => {
+      for (const origin of [undefined, "https://attacker.example"]) {
+        const headers = new Headers({ Authorization: "Bearer valid-token" });
+        if (origin) headers.set("Origin", origin);
+        await expect(
+          authenticateAdmin(
+            new Request("http://localhost/api/admin/services", { method, headers }),
+          ),
+        ).rejects.toMatchObject({ status: 403 });
+      }
+      expect(mocks.verifyIdToken).not.toHaveBeenCalled();
+    },
+  );
+
+  it("accepts a mutation from the same origin and does not require Origin on GET", async () => {
+    mocks.verifyIdToken.mockResolvedValue({ uid: "admin-1", admin: true, salonId: "salon-1" });
+    const admin = { salonId: "salon-1", userId: "admin-1" };
+
+    await expect(
+      authenticateAdmin(
+        new Request("http://localhost/api/admin/services", {
+          method: "POST",
+          headers: { Authorization: "Bearer valid-token", Origin: "http://localhost" },
+        }),
+      ),
+    ).resolves.toEqual(admin);
+    await expect(
+      authenticateAdmin(
+        new Request("http://localhost/api/admin/services", {
+          headers: { Authorization: "Bearer valid-token" },
+        }),
+      ),
+    ).resolves.toEqual(admin);
+  });
 });

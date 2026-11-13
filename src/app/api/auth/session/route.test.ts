@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   createAdminSessionCookie: vi.fn(),
   logUnexpectedServerError: vi.fn(),
+  revokeAdminSessions: vi.fn(),
   verifyAdminIdToken: vi.fn(),
   verifyIdToken: vi.fn(),
 }));
@@ -22,7 +23,11 @@ vi.mock("@/server/auth/admin-context", async (importOriginal) => {
 
 vi.mock("@/server/auth/admin-session", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/auth/admin-session")>();
-  return { ...actual, createAdminSessionCookie: mocks.createAdminSessionCookie };
+  return {
+    ...actual,
+    createAdminSessionCookie: mocks.createAdminSessionCookie,
+    revokeAdminSessions: mocks.revokeAdminSessions,
+  };
 });
 
 vi.mock("@/server/observability/log-unexpected-server-error", () => ({
@@ -325,5 +330,63 @@ describe("administrative session route", () => {
     expect(response.status).toBe(403);
     expect(response.headers.get("set-cookie")).toBeNull();
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("revokes the refresh tokens of a valid session cookie on logout and clears the cookie", async () => {
+    mocks.revokeAdminSessions.mockResolvedValue(undefined);
+
+    const response = await DELETE(sameOriginRequestWithCookie());
+
+    expect(response.status).toBe(204);
+    expect(mocks.revokeAdminSessions).toHaveBeenCalledWith("possibly-invalid-session");
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  it("does not revoke anything when there is no cookie, but still clears it", async () => {
+    const response = await DELETE(
+      new Request("http://localhost/api/auth/session", {
+        method: "DELETE",
+        headers: { Origin: "http://localhost" },
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(mocks.revokeAdminSessions).not.toHaveBeenCalled();
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  it("clears the cookie even when the cookie is invalid", async () => {
+    mocks.revokeAdminSessions.mockRejectedValue(
+      new AuthorizationError("Token de autenticação inválido.", 401),
+    );
+
+    const response = await DELETE(sameOriginRequestWithCookie());
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(mocks.logUnexpectedServerError).not.toHaveBeenCalled();
+  });
+
+  it("clears the cookie and logs when revocation fails unexpectedly", async () => {
+    const failure = new Error("provider outage");
+    mocks.revokeAdminSessions.mockRejectedValue(failure);
+
+    const response = await DELETE(sameOriginRequestWithCookie());
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(mocks.logUnexpectedServerError).toHaveBeenCalledWith("/api/auth/session", failure);
+  });
+
+  it("does not revoke sessions for a foreign origin", async () => {
+    const response = await DELETE(
+      new Request("http://localhost/api/auth/session", {
+        method: "DELETE",
+        headers: { Cookie: "admin_session=valid", Origin: "https://attacker.example" },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.revokeAdminSessions).not.toHaveBeenCalled();
   });
 });

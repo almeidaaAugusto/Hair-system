@@ -39,6 +39,7 @@
 ### Task 1: Server session and authorization primitives
 
 **Files:**
+
 - Create: src/server/auth/admin-session.ts
 - Create: src/server/auth/admin-session.test.ts
 - Modify: src/server/auth/admin-context.ts
@@ -46,6 +47,7 @@
 - Modify: src/server/auth/authenticate-admin.test.ts
 
 **Interfaces:**
+
 - Produces ADMIN_SESSION_COOKIE_NAME, ADMIN_SESSION_MAX_AGE_SECONDS, getAdminSessionCookie(request), createAdminSessionCookie(idToken), and getAdminSessionCookieOptions().
 - Produces verifyAdminIdToken(token), verifyAdminSessionCookie(cookie), and authenticateAdmin(request).
 - verifyAdminIdToken returns an object shaped as { admin: AdminContext, authTime: number | undefined }.
@@ -53,7 +55,7 @@
 
 - [ ] **Step 1: Write the failing tests**
 
-~~~ts
+```ts
 it("verifies a session cookie with revocation checking", async () => {
   mocks.verifySessionCookie.mockResolvedValue({
     admin: true,
@@ -85,7 +87,7 @@ it("creates a five-day Firebase session cookie", async () => {
     expiresIn: 5 * 24 * 60 * 60 * 1000,
   });
 });
-~~~
+```
 
 Also test missing cookie as 401, non-admin/missing salon claims as 403, secure cookie options under production, and Firebase token/session errors mapped to safe 401 errors.
 
@@ -97,7 +99,7 @@ Expected: FAIL because the session module and cookie authentication interfaces d
 
 - [ ] **Step 3: Implement the minimal primitives**
 
-~~~ts
+```ts
 export const ADMIN_SESSION_COOKIE_NAME = "admin_session";
 export const ADMIN_SESSION_MAX_AGE_SECONDS = 5 * 24 * 60 * 60;
 
@@ -120,7 +122,7 @@ export async function authenticateAdmin(request: Request): Promise<AdminContext>
   if (!cookie) throw new AuthorizationError("Token de autenticação ausente.", 401);
   return verifyAdminSessionCookie(cookie);
 }
-~~~
+```
 
 Implement robust Cookie-header parsing without a dependency. Keep getAdminContext as the only claim validation point. Use the existing Admin SDK app and checkRevoked=true for both token types. Make createAdminSessionCookie call createSessionCookie with exactly five days and make options secure only when NODE_ENV is production.
 
@@ -134,25 +136,27 @@ Expected: PASS; bearer coverage remains intact and cookie verification checks re
 
 - [ ] **Step 5: Commit the scoped change**
 
-~~~powershell
+```powershell
 git add -- src/server/auth/admin-session.ts src/server/auth/admin-session.test.ts src/server/auth/admin-context.ts src/server/auth/admin-context.test.ts src/server/auth/authenticate-admin.test.ts
 git commit -m "feat: add administrative session primitives"
-~~~
+```
 
 ### Task 2: Session exchange Route Handler
 
 **Files:**
+
 - Create: src/app/api/auth/session/route.ts
 - Create: src/app/api/auth/session/route.test.ts
 
 **Interfaces:**
+
 - Consumes getBearerToken, verifyAdminIdToken, AuthorizationError, createAdminSessionCookie, and cookie constants/options.
 - Produces POST(request) and DELETE(request) at /api/auth/session.
 - POST requires a same-origin request, a bearer ID token, a recent auth_time, and validated claims. DELETE clears the cookie independently of its current validity.
 
 - [ ] **Step 1: Write the failing route tests**
 
-~~~ts
+```ts
 it("sets only an HttpOnly administrative cookie after a recent authorized login", async () => {
   mocks.verifyAdminIdToken.mockResolvedValue({
     admin: { salonId: "salon-1", userId: "admin-1" },
@@ -193,7 +197,7 @@ it("clears the session cookie on same-origin logout", async () => {
   expect(response.status).toBe(204);
   expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
 });
-~~~
+```
 
 Cover absent/malformed bearer tokens, a missing auth_time, a foreign or absent Origin header, and an unexpected Admin SDK failure with safe responses.
 
@@ -205,7 +209,7 @@ Expected: FAIL because /api/auth/session does not exist.
 
 - [ ] **Step 3: Implement session creation and deletion**
 
-~~~ts
+```ts
 function assertSameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin || origin !== new URL(request.url).origin) {
@@ -233,7 +237,7 @@ export async function POST(request: Request): Promise<Response> {
   );
   return response;
 }
-~~~
+```
 
 Set runtime=nodejs and dynamic=force-dynamic. Convert expected authorization errors to bounded JSON 401/403 responses. Use the project safe server-error logger for unexpected failures, never returning a provider error. DELETE follows the same Origin rule, creates a 204 no-store response, and expires the same path/name cookie with maxAge=0.
 
@@ -245,14 +249,15 @@ Expected: PASS for successful exchange, invalid token, non-admin, missing salonI
 
 - [ ] **Step 5: Commit the endpoint**
 
-~~~powershell
+```powershell
 git add -- src/app/api/auth/session/route.ts src/app/api/auth/session/route.test.ts
 git commit -m "feat: add admin session endpoint"
-~~~
+```
 
 ### Task 3: Server route protection and redirect behavior
 
 **Files:**
+
 - Create: src/server/auth/admin-page-session.ts
 - Create: src/server/auth/admin-page-session.test.ts
 - Create: src/proxy.ts
@@ -263,6 +268,7 @@ git commit -m "feat: add admin session endpoint"
 - Modify: src/app/admin/business-hours/page.tsx
 
 **Interfaces:**
+
 - Produces requireAdminSession(), which redirects unauthenticated, expired, revoked, non-admin, and missing-salon sessions to /login.
 - Produces getOptionalAdminSession(), which returns null rather than throwing so /login redirects only a fully verified administrator.
 - Proxy matches /admin/:path*, redirects only when admin_session is absent, and preserves pathname plus query in next.
@@ -270,7 +276,7 @@ git commit -m "feat: add admin session endpoint"
 
 - [ ] **Step 1: Write failing guard and Proxy tests**
 
-~~~ts
+```ts
 it("redirects a no-cookie admin request to login and preserves the return path", () => {
   const response = proxy(new NextRequest("http://localhost/admin/services?tab=active"));
 
@@ -298,7 +304,7 @@ it("redirects a rejected server session before page content renders", async () =
     digest: expect.stringContaining("NEXT_REDIRECT"),
   });
 });
-~~~
+```
 
 Test optional inspection with valid session, no cookie, invalid session, no redirect loop from /login, and matcher coverage for /admin itself plus nested routes.
 
@@ -310,7 +316,7 @@ Expected: FAIL because the helper and Proxy are absent.
 
 - [ ] **Step 3: Implement the authoritative page gate**
 
-~~~tsx
+```tsx
 export default async function ServicesPage() {
   await requireAdminSession();
   return <ServicesAdminPage />;
@@ -319,16 +325,13 @@ export default async function ServicesPage() {
 export function proxy(request: NextRequest) {
   if (!request.cookies.has(ADMIN_SESSION_COOKIE_NAME)) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set(
-      "next",
-      request.nextUrl.pathname + request.nextUrl.search,
-    );
+    loginUrl.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
     return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
 }
-~~~
+```
 
 The page helper reads the cookie through Next cookies(), verifies it with Task 1, and uses redirect("/login") only after a failed server verification. Login checks getOptionalAdminSession and redirects a valid administrator to /admin/services. If a cookie exists but verification fails, pass hasStaleSession to the client login component so it calls DELETE /api/auth/session once and removes the stale cookie without looping.
 
@@ -342,14 +345,15 @@ Expected: PASS; all current /admin pages are server-guarded before their client 
 
 - [ ] **Step 5: Commit route protection**
 
-~~~powershell
+```powershell
 git add -- src/server/auth/admin-page-session.ts src/server/auth/admin-page-session.test.ts src/proxy.ts src/proxy.test.ts src/app/admin/page.tsx src/app/login/page.tsx src/app/admin/services/page.tsx src/app/admin/business-hours/page.tsx
 git commit -m "feat: protect administrative routes on the server"
-~~~
+```
 
 ### Task 4: One login UI, cookie API calls, and accessible logout
 
 **Files:**
+
 - Create: src/features/admin-auth/login-destination.ts
 - Create: src/features/admin-auth/login-destination.test.ts
 - Create: src/features/admin-auth/admin-login-page.tsx
@@ -362,6 +366,7 @@ git commit -m "feat: protect administrative routes on the server"
 - Modify: src/app/globals.css
 
 **Interfaces:**
+
 - getSafeAdminDestination(next) accepts exactly /admin or paths starting /admin/; every other string maps to /admin/services.
 - getLoginErrorMessage(firebaseCode, sessionStatus) maps wrong credentials, non-admin/missing salon, and unexpected errors to bounded Portuguese copy.
 - fetchAdmin(input, init) explicitly uses credentials=same-origin. A 401/403 begins safe navigation to /login and throws AdminSessionExpiredError so CRUD UI does not keep working as authenticated.
@@ -369,7 +374,7 @@ git commit -m "feat: protect administrative routes on the server"
 
 - [ ] **Step 1: Write failing pure-client tests**
 
-~~~ts
+```ts
 it.each(["/admin", "/admin/services", "/admin/services?tab=active"])(
   "keeps an internal administrative return destination",
   (next) => expect(getSafeAdminDestination(next)).toBe(next),
@@ -385,7 +390,7 @@ it("does not expose Firebase provider details for unexpected failures", () => {
     "Não foi possível entrar. Tente novamente.",
   );
 });
-~~~
+```
 
 Test explicit invalid credential code mapping and 403 mapping to the administrative-authorization message.
 
@@ -397,7 +402,7 @@ Expected: FAIL because login-destination.ts does not exist.
 
 - [ ] **Step 3: Implement the client flow**
 
-~~~tsx
+```tsx
 const auth = await getSessionClientAuth();
 
 try {
@@ -416,7 +421,7 @@ try {
   await signOut(auth).catch(() => undefined);
   setMessage(getLoginErrorMessage(getFirebaseErrorCode(error), getSessionStatus(error)));
 }
-~~~
+```
 
 Configure Firebase Auth in-memory persistence before sign-in. Connect to the Auth Emulator exactly once only when NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST is present. Remove token, setToken, Firebase credential login, and UI-generated Authorization headers from service and business-hours pages. Load data through fetchAdmin in useEffect and preserve existing CRUD behavior. Use shared navigation in both screens.
 
@@ -434,14 +439,15 @@ Expected: PASS; the browser UI has no durable token state or per-route login scr
 
 - [ ] **Step 5: Commit the client flow**
 
-~~~powershell
+```powershell
 git add -- src/features/admin-auth src/features/admin-services/firebase-client.ts src/features/admin-services/services-admin-page.tsx src/features/admin-business-hours/business-hours-admin-page.tsx src/app/globals.css
 git commit -m "feat: add persistent admin login and logout"
-~~~
+```
 
 ### Task 5: Emulator-backed end-to-end coverage and claim-change invalidation
 
 **Files:**
+
 - Create: playwright.auth.config.ts
 - Create: tests/e2e/admin-auth.spec.ts
 - Modify: package.json
@@ -449,13 +455,14 @@ git commit -m "feat: add persistent admin login and logout"
 - Modify: tests/e2e/verification.spec.ts
 
 **Interfaces:**
+
 - Produces npm run test:e2e:auth, executing Playwright inside firebase emulators:exec with Auth and Firestore.
 - The auth Playwright configuration provides FIREBASE_AUTH_EMULATOR_HOST, FIRESTORE_EMULATOR_HOST, FIREBASE_PROJECT_ID, and public Firebase emulator values to the Next dev server.
 - E2E setup creates three isolated emulator accounts: authorized admin, non-admin, and admin without salonId.
 
 - [ ] **Step 1: Write failing E2E coverage**
 
-~~~ts
+```ts
 async function loginAsAdmin(page: Page) {
   await page.goto("/login");
   await page.getByLabel("E-mail").fill("admin@example.test");
@@ -482,7 +489,7 @@ test("redirects direct unauthenticated access and clears access after logout", a
   await page.goto("/admin/services");
   await expect(page).toHaveURL(/\/login\?next=/);
 });
-~~~
+```
 
 Add separate assertions for wrong password, nonexistent account, non-admin, missing salonId, authorized access to /login, no redirect loop, and direct access to both current administrative feature routes.
 
@@ -494,15 +501,15 @@ Expected: FAIL because the script, emulator configuration, provisioning, and fin
 
 - [ ] **Step 3: Implement emulator configuration and supported claim invalidation**
 
-~~~json
+```json
 "test:e2e:auth": "firebase emulators:exec --project demo-sistema-cabelo --only auth,firestore \"playwright test --config playwright.auth.config.ts\""
-~~~
+```
 
 Use Playwright beforeAll to initialize Firebase Admin against the emulator, create the three accounts, and set their claims before browser login. Update set-admin-claims.mjs after setCustomUserClaims:
 
-~~~js
+```js
 await auth.revokeRefreshTokens(user.uid);
-~~~
+```
 
 This forces session verification to reject old sessions when the supported claim-management workflow changes admin or salonId. Update existing verification E2E assertions: direct administrative visits now redirect to /login rather than displaying embedded login forms.
 
@@ -516,18 +523,20 @@ Expected: PASS for login, all denial cases, direct redirects, no loop, navigatio
 
 - [ ] **Step 5: Commit E2E coverage**
 
-~~~powershell
+```powershell
 git add -- playwright.auth.config.ts tests/e2e/admin-auth.spec.ts tests/e2e/verification.spec.ts package.json scripts/set-admin-claims.mjs
 git commit -m "test: cover administrative authentication flow"
-~~~
+```
 
 ### Task 6: Full verification, security review, and final handoff
 
 **Files:**
+
 - Modify only files that formatter reports within this scoped authentication work.
 - Do not stage unrelated next-env.d.ts or the pre-existing untracked docs baseline files.
 
 **Interfaces:**
+
 - Consumes Tasks 1-5.
 - Produces test and review evidence for every acceptance criterion and a final report. It never pushes changes.
 
@@ -569,10 +578,10 @@ Check that no duplicated login flow remains; loading, disabled controls, alerts,
 
 - [ ] **Step 5: Commit any remaining verified scoped work**
 
-~~~powershell
+```powershell
 git status --short
 git diff --cached --check
 git commit -m "feat: finalize administrative authentication"
-~~~
+```
 
 Create this final commit only if scoped implementation changes remain after the task-level commits. Report what was preserved, session behavior, tests and results, the class-diagram versus Firebase-claims discrepancy, and remaining risk. Do not push.

@@ -1,6 +1,7 @@
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { cert, deleteApp, initializeApp, type App } from "firebase-admin/app";
 import {
+  FieldValue,
   getFirestore,
   Timestamp,
   type Firestore,
@@ -485,20 +486,18 @@ describe("Firestore appointments transactions", { timeout: 30_000 }, () => {
     ).toBe(60);
   });
 
-  it.each([{ isActive: false }, { requiresEvaluation: true }])(
-    "rejects ineligible services %j",
-    async (change) => {
-      await firestore.collection("services").doc(serviceId).update(change);
-      const { repository, trace } = instrument();
-      await expect(repository.reserve(salonId, "admin", input())).rejects.toMatchObject({
-        code: "SERVICE_UNAVAILABLE",
-      });
-      await expect(repository.getAvailability(salonId, { date, serviceId })).rejects.toMatchObject({
-        code: "SERVICE_UNAVAILABLE",
-      });
-      expect(trace.writes).toBe(0);
-    },
-  );
+  it.each([
+    [{ isActive: false }, "SERVICE_INACTIVE"],
+    [{ requiresEvaluation: true }, "SERVICE_REQUIRES_EVALUATION"],
+  ])("rejects ineligible services %j", async (change, code) => {
+    await firestore.collection("services").doc(serviceId).update(change);
+    const { repository, trace } = instrument();
+    await expect(repository.reserve(salonId, "admin", input())).rejects.toMatchObject({ code });
+    await expect(repository.getAvailability(salonId, { date, serviceId })).rejects.toMatchObject({
+      code: "SERVICE_UNAVAILABLE",
+    });
+    expect(trace.writes).toBe(0);
+  });
 
   it("hides missing/foreign services and rejects foreign business hours", async () => {
     const { repository } = instrument();
@@ -871,5 +870,133 @@ describe("Firestore reschedule, reminder and client confirmation", { timeout: 30
     await expect(
       repository.markReminderSent(salonId, "admin", appointment.id),
     ).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
+  });
+});
+
+describe("Firestore administrative exceptions", { timeout: 30_000 }, () => {
+  const early = `${date}T09:00:00.000Z`; // 06:00 local, before opening
+  const earlyEnd = `${date}T10:00:00.000Z`;
+
+  it("rejects out-of-hours and evaluation services by default without writing", async () => {
+    const { repository, trace } = instrument();
+    await expect(
+      repository.reserve(salonId, "admin", input({ startAt: early })),
+    ).rejects.toMatchObject({ code: "OUTSIDE_BUSINESS_HOURS" });
+    await firestore.collection("services").doc(serviceId).update({ requiresEvaluation: true });
+    await expect(repository.reserve(salonId, "admin", input())).rejects.toMatchObject({
+      code: "SERVICE_REQUIRES_EVALUATION",
+    });
+    expect(trace.writes).toBe(0);
+  });
+
+  it("persists an accepted out-of-hours exception, returns it and replays it", async () => {
+    const { repository } = instrument();
+    const request = input({ startAt: early, allowExceptions: true });
+    const created = await repository.reserve(salonId, "admin", request);
+    expect(created.replayed).toBe(false);
+    expect(created.appointment.exceptions).toEqual(["outsideBusinessHours"]);
+    const stored = await firestore.collection("appointments").doc(created.appointment.id).get();
+    expect(stored.get("exceptions")).toEqual(["outsideBusinessHours"]);
+    const replay = await repository.reserve(salonId, "admin", request);
+    expect(replay.replayed).toBe(true);
+    expect(replay.appointment).toEqual(created.appointment);
+    const day = await repository.getDay(salonId, date);
+    expect(day.appointments[0].exceptions).toEqual(["outsideBusinessHours"]);
+  });
+
+  it("treats allowExceptions as part of the idempotency fingerprint", async () => {
+    const { repository } = instrument();
+    const request = input({ startAt: early, allowExceptions: true });
+    await repository.reserve(salonId, "admin", request);
+    await expect(
+      repository.reserve(salonId, "admin", { ...request, allowExceptions: false }),
+    ).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+  });
+
+  it("accepts an evaluation service with the exception and keeps it confirmed", async () => {
+    await firestore.collection("services").doc(serviceId).update({ requiresEvaluation: true });
+    const { repository } = instrument();
+    const { appointment } = await repository.reserve(
+      salonId,
+      "admin",
+      input({ allowExceptions: true }),
+    );
+    expect(appointment.status).toBe("confirmed");
+    expect(appointment.exceptions).toEqual(["requiresEvaluation"]);
+  });
+
+  it("still blocks conflicts, time blocks and inactive services with exceptions", async () => {
+    const { repository } = instrument();
+    await repository.reserve(salonId, "admin", input({ startAt: early, allowExceptions: true }));
+    await expect(
+      repository.reserve(
+        salonId,
+        "admin",
+        input({ startAt: `${date}T09:30:00.000Z`, allowExceptions: true }),
+      ),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    // 10:00Z is still inside the 10 minute interval of the first appointment.
+    await expect(
+      repository.reserve(salonId, "admin", input({ startAt: earlyEnd, allowExceptions: true })),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await repository.createBlock(salonId, "admin", {
+      requestId: randomUUID(),
+      startAt: `${date}T05:00:00.000Z`,
+      endAt: `${date}T06:00:00.000Z`,
+    });
+    await expect(
+      repository.reserve(
+        salonId,
+        "admin",
+        input({ startAt: `${date}T05:30:00.000Z`, allowExceptions: true }),
+      ),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await firestore.collection("services").doc(serviceId).update({ isActive: false });
+    await expect(
+      repository.reserve(
+        salonId,
+        "admin",
+        input({ startAt: `${date}T20:00:00.000Z`, allowExceptions: true }),
+      ),
+    ).rejects.toMatchObject({ code: "SERVICE_INACTIVE" });
+  });
+
+  it("refuses an appointment that crosses local midnight even with exceptions", async () => {
+    const { repository } = instrument();
+    await expect(
+      repository.reserve(
+        salonId,
+        "admin",
+        input({ startAt: `2026-11-17T02:30:00.000Z`, allowExceptions: true }),
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_TIME_RANGE" });
+  });
+
+  it("reads legacy documents without the exceptions field as empty", async () => {
+    const { repository } = instrument();
+    const { appointment } = await repository.reserve(salonId, "admin", input());
+    await firestore
+      .collection("appointments")
+      .doc(appointment.id)
+      .update({ exceptions: FieldValue.delete() });
+    const day = await repository.getDay(salonId, date);
+    expect(day.appointments[0].exceptions).toEqual([]);
+  });
+
+  it("reschedules with exceptions, persists them and clears them when back in hours", async () => {
+    const { repository } = instrument();
+    const { appointment } = await repository.reserve(salonId, "admin", input());
+    await expect(
+      repository.reschedule(salonId, "admin", appointment.id, { startAt: early }),
+    ).rejects.toMatchObject({ code: "OUTSIDE_BUSINESS_HOURS" });
+    const moved = await repository.reschedule(salonId, "admin", appointment.id, {
+      startAt: early,
+      allowExceptions: true,
+    });
+    expect(moved.exceptions).toEqual(["outsideBusinessHours"]);
+    const stored = await firestore.collection("appointments").doc(appointment.id).get();
+    expect(stored.get("exceptions")).toEqual(["outsideBusinessHours"]);
+    const back = await repository.reschedule(salonId, "admin", appointment.id, { startAt });
+    expect(back.exceptions).toEqual([]);
   });
 });

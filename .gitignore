@@ -12,3 +12,4 @@ firestore-debug.log
 .env*.local
 Levantamento de requisitos*.csv
 next-env.d.ts
+.vercel

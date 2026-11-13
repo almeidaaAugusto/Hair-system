@@ -8,6 +8,7 @@ import type { AvailabilityWindow } from "@/domain/appointments/availability";
 import { getLocalDayBounds } from "@/domain/appointments/local-date";
 import type { Service } from "@/domain/services/service";
 import { fetchAdmin } from "@/features/admin-auth/admin-api-client";
+import { UserMessageError, toUserMessage } from "@/features/shared/user-message";
 import { formatBrazilianReal } from "@/features/admin-services/money";
 
 import {
@@ -16,6 +17,14 @@ import {
   listStartOptions,
   localDateTimeToUtc,
 } from "./agenda-calendar";
+import {
+  canChooseStartTime,
+  createPendingOverride,
+  isLocalDateInput,
+  parseOverridableError,
+  resolveStartAt,
+  type PendingOverride,
+} from "./booking-exceptions";
 import {
   buildPaymentInput,
   getDefaultPaymentFields,
@@ -31,6 +40,8 @@ type AppointmentFields = {
   serviceId: string;
   date: string;
   startAt: string;
+  useCustomTime: boolean;
+  customTime: string;
   name: string;
   phone: string;
   source: "manual" | "whatsapp";
@@ -42,7 +53,7 @@ type AvailabilityState =
   | { status: "error"; message: string }
   | { status: "ready"; windows: AvailabilityWindow[]; options: string[] };
 
-/** Active services that can be confirmed (no evaluation), sorted by name. */
+/** Active services (including those that require evaluation), sorted by name. */
 function useBookableServices() {
   const [services, setServices] = useState<Service[]>();
   const [error, setError] = useState<string>();
@@ -52,21 +63,18 @@ function useBookableServices() {
       try {
         const response = await fetchAdmin("/api/admin/services");
         if (!response.ok)
-          throw new Error(
+          throw new UserMessageError(
             await readAgendaError(response, "Não foi possível carregar os serviços."),
           );
         const data = (await response.json()) as { services: Service[] };
         if (!isMounted) return;
         setServices(
           data.services
-            .filter((service) => service.isActive && !service.requiresEvaluation)
+            .filter((service) => service.isActive)
             .sort((a, b) => a.name.localeCompare(b.name)),
         );
       } catch (caught) {
-        if (isMounted)
-          setError(
-            caught instanceof Error ? caught.message : "Não foi possível carregar os serviços.",
-          );
+        if (isMounted) setError(toUserMessage(caught, "Não foi possível carregar os serviços."));
       }
     })();
     return () => {
@@ -79,7 +87,7 @@ function useBookableServices() {
 /** Free windows for a service and date; `excludeAppointmentId` ignores the appointment being moved. */
 function useAvailability(serviceId: string, date: string, excludeAppointmentId?: string) {
   const [refreshKey, setRefreshKey] = useState(0);
-  const canQuery = Boolean(serviceId) && /^\d{4}-\d{2}-\d{2}$/.test(date);
+  const canQuery = Boolean(serviceId) && isLocalDateInput(date);
   const queryKey = `${serviceId}|${date}|${excludeAppointmentId ?? ""}|${refreshKey}`;
   const [loaded, setLoaded] = useState<{ key: string; state: AvailabilityState }>();
   const availability: AvailabilityState = !canQuery
@@ -103,7 +111,7 @@ function useAvailability(serviceId: string, date: string, excludeAppointmentId?:
         });
         const response = await fetchAdmin(`/api/admin/appointments/availability?${query}`);
         if (!response.ok)
-          throw new Error(
+          throw new UserMessageError(
             await readAgendaError(response, "Não foi possível consultar os horários."),
           );
         const data = (await response.json()) as { windows: AvailabilityWindow[] };
@@ -111,8 +119,7 @@ function useAvailability(serviceId: string, date: string, excludeAppointmentId?:
       } catch (error) {
         settle({
           status: "error",
-          message:
-            error instanceof Error ? error.message : "Não foi possível consultar os horários.",
+          message: toUserMessage(error, "Não foi possível consultar os horários."),
         });
       }
     })();
@@ -128,16 +135,30 @@ type SlotPickerProps = {
   availability: AvailabilityState;
   onRetry: () => void;
   registration: UseFormRegisterReturn;
+  customToggle: UseFormRegisterReturn;
+  customTime: UseFormRegisterReturn;
+  useCustomTime: boolean;
   hint?: string;
 };
 
-function SlotPicker({ availability, onRetry, registration, hint }: SlotPickerProps) {
+function SlotPicker({
+  availability,
+  onRetry,
+  registration,
+  customToggle,
+  customTime,
+  useCustomTime,
+  hint,
+}: SlotPickerProps) {
+  const showList = !useCustomTime;
   return (
     <fieldset className="agenda-slots">
       <legend>Horário</legend>
       {availability.status === "idle" ? <p>Escolha o serviço e a data.</p> : null}
-      {availability.status === "loading" ? <p role="status">Consultando horários livres…</p> : null}
-      {availability.status === "error" ? (
+      {showList && availability.status === "loading" ? (
+        <p role="status">Consultando horários livres…</p>
+      ) : null}
+      {showList && availability.status === "error" ? (
         <p role="alert">
           {availability.message}{" "}
           <button className="link-button" onClick={onRetry} type="button">
@@ -145,10 +166,10 @@ function SlotPicker({ availability, onRetry, registration, hint }: SlotPickerPro
           </button>
         </p>
       ) : null}
-      {availability.status === "ready" && availability.options.length === 0 ? (
+      {showList && availability.status === "ready" && availability.options.length === 0 ? (
         <p role="status">Não há horários livres para este serviço nesta data.</p>
       ) : null}
-      {availability.status === "ready" && availability.options.length > 0 ? (
+      {showList && availability.status === "ready" && availability.options.length > 0 ? (
         <>
           <p className="agenda-hint">
             Livre:{" "}
@@ -173,12 +194,74 @@ function SlotPicker({ availability, onRetry, registration, hint }: SlotPickerPro
           {hint ? <p className="agenda-hint">{hint}</p> : null}
         </>
       ) : null}
+      {availability.status !== "idle" ? (
+        <>
+          <label className="checkbox-label">
+            <input type="checkbox" {...customToggle} /> Outro horário (digitar)
+          </label>
+          {useCustomTime ? (
+            <>
+              <label>
+                Horário de início
+                <input required step={60} type="time" {...customTime} />
+              </label>
+              <p className="agenda-hint">
+                Mesmo dia. Se o horário estiver fora do expediente, você poderá confirmar a exceção.
+              </p>
+            </>
+          ) : null}
+        </>
+      ) : null}
     </fieldset>
   );
 }
 
+type ExceptionNoticeProps = {
+  warning: string;
+  isSubmitting: boolean;
+  onConfirm: () => void;
+  onBack: () => void;
+};
+
+/** Asks the professional to confirm an administrative exception before resending. */
+function ExceptionNotice({ warning, isSubmitting, onConfirm, onBack }: ExceptionNoticeProps) {
+  return (
+    <div className="agenda-exception" role="alert">
+      <p>
+        <strong>{warning}</strong>
+      </p>
+      <p className="agenda-hint">
+        Você pode confirmar mesmo assim; o atendimento ficará marcado como exceção na agenda.
+      </p>
+      <div className="service-form-actions">
+        <button className="secondary-button" disabled={isSubmitting} onClick={onBack} type="button">
+          Voltar
+        </button>
+        <button disabled={isSubmitting} onClick={onConfirm} type="button">
+          {isSubmitting ? "Salvando…" : "Agendar mesmo assim"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Booking needs either a listed free slot or a typed time. */
+function canChooseStart(
+  availability: AvailabilityState,
+  useCustomTime: boolean,
+  serviceId: string,
+  date: string,
+): boolean {
+  return canChooseStartTime({
+    availabilityReady: availability.status === "ready",
+    useCustomTime,
+    serviceId,
+    date,
+  });
+}
+
 function serviceLabel(service: Service): string {
-  return `${service.name} · ${service.durationMinutes} min · ${service.hasVariablePrice ? "a partir de " : ""}${formatBrazilianReal(service.startingPriceCents)}`;
+  return `${service.name} · ${service.durationMinutes} min · ${service.hasVariablePrice ? "a partir de " : ""}${formatBrazilianReal(service.startingPriceCents)}${service.requiresEvaluation ? " · exige avaliação" : ""}`;
 }
 
 type AppointmentFormProps = {
@@ -187,12 +270,21 @@ type AppointmentFormProps = {
   onCreated: (appointment: Appointment) => void;
 };
 
+type AppointmentPayload = {
+  serviceId: string;
+  startAt: string;
+  client: { name: string; phone: string };
+  source: "manual" | "whatsapp";
+};
+
 export function AppointmentForm({ defaultDate, onCancel, onCreated }: AppointmentFormProps) {
   const form = useForm<AppointmentFields>({
     defaultValues: {
       serviceId: "",
       date: defaultDate,
       startAt: "",
+      useCustomTime: false,
+      customTime: "",
       name: "",
       phone: "",
       source: "whatsapp",
@@ -201,10 +293,14 @@ export function AppointmentForm({ defaultDate, onCancel, onCreated }: Appointmen
   const { control, setValue } = form;
   const serviceId = useWatch({ control, name: "serviceId" });
   const date = useWatch({ control, name: "date" });
+  const useCustomTime = useWatch({ control, name: "useCustomTime" });
   const { services, error: servicesError } = useBookableServices();
   const { availability, queryKey, refresh } = useAvailability(serviceId, date);
   const [message, setMessage] = useState<string>();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pending, setPending] = useState<
+    PendingOverride<AppointmentPayload> & { formKey: string }
+  >();
   // One key per form opening: a retried submission after a lost response replays safely.
   const [requestId] = useState(() => crypto.randomUUID());
 
@@ -212,23 +308,36 @@ export function AppointmentForm({ defaultDate, onCancel, onCreated }: Appointmen
     setValue("startAt", "");
   }, [queryKey, setValue]);
 
-  async function submit(fields: AppointmentFields) {
+  // Any edit invalidates the exception the professional was asked to confirm.
+  const formKey = JSON.stringify(useWatch({ control }));
+  const activePending = pending?.formKey === formKey ? pending : undefined;
+
+  async function send(payload: AppointmentPayload, id: string, allowExceptions: boolean) {
     setIsSubmitting(true);
     setMessage(undefined);
     try {
       const response = await fetchAdmin("/api/admin/appointments", {
         body: JSON.stringify({
-          requestId,
-          serviceId: fields.serviceId,
-          startAt: fields.startAt,
-          client: { name: fields.name, phone: fields.phone },
-          source: fields.source,
+          requestId: id,
+          ...payload,
+          ...(allowExceptions ? { allowExceptions: true } : {}),
         }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { code?: string } | null;
+        const overridable = allowExceptions
+          ? undefined
+          : parseOverridableError(response.status, body);
+        if (overridable) {
+          setPending({
+            ...createPendingOverride(overridable, payload, () => crypto.randomUUID()),
+            formKey,
+          });
+          return;
+        }
+        setPending(undefined);
         if (body?.code === "CONFLICT") refresh();
         setMessage(getAgendaErrorMessage(body, "Não foi possível salvar o agendamento."));
         return;
@@ -236,10 +345,28 @@ export function AppointmentForm({ defaultDate, onCancel, onCreated }: Appointmen
       const data = (await response.json()) as { appointment: Appointment };
       onCreated(data.appointment);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível salvar o agendamento.");
+      setMessage(toUserMessage(error, "Não foi possível salvar o agendamento."));
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function submit(fields: AppointmentFields) {
+    const start = resolveStartAt(fields);
+    if ("error" in start) {
+      setMessage(start.error);
+      return;
+    }
+    await send(
+      {
+        serviceId: fields.serviceId,
+        startAt: start.startAt,
+        client: { name: fields.name, phone: fields.phone },
+        source: fields.source,
+      },
+      requestId,
+      false,
+    );
   }
 
   const selectedService = services?.find((service) => service.id === serviceId);
@@ -254,10 +381,7 @@ export function AppointmentForm({ defaultDate, onCancel, onCreated }: Appointmen
       {servicesError ? <p role="alert">{servicesError}</p> : null}
       {!services && !servicesError ? <p role="status">Carregando serviços…</p> : null}
       {services && services.length === 0 ? (
-        <p role="status">
-          Nenhum serviço disponível para confirmação. Cadastre ou ative um serviço que não exija
-          avaliação.
-        </p>
+        <p role="status">Nenhum serviço ativo. Cadastre ou ative um serviço.</p>
       ) : null}
       <div className="agenda-form-grid">
         <label>
@@ -278,13 +402,16 @@ export function AppointmentForm({ defaultDate, onCancel, onCreated }: Appointmen
       </div>
       <SlotPicker
         availability={availability}
+        customTime={form.register("customTime")}
+        customToggle={form.register("useCustomTime")}
         hint={
           selectedService
             ? `Duração de ${selectedService.durationMinutes} min, mais o intervalo configurado entre atendimentos.`
             : undefined
         }
         onRetry={refresh}
-        registration={form.register("startAt", { required: true })}
+        registration={form.register("startAt")}
+        useCustomTime={useCustomTime}
       />
       <div className="agenda-form-grid">
         <label>
@@ -312,19 +439,31 @@ export function AppointmentForm({ defaultDate, onCancel, onCreated }: Appointmen
         </label>
       </fieldset>
       {message ? <p role="alert">{message}</p> : null}
-      <div className="service-form-actions">
-        <button
-          className="secondary-button"
-          disabled={isSubmitting}
-          onClick={onCancel}
-          type="button"
-        >
-          Cancelar
-        </button>
-        <button disabled={isSubmitting || availability.status !== "ready"} type="submit">
-          {isSubmitting ? "Salvando…" : "Confirmar agendamento"}
-        </button>
-      </div>
+      {activePending ? (
+        <ExceptionNotice
+          isSubmitting={isSubmitting}
+          onBack={() => setPending(undefined)}
+          onConfirm={() => void send(activePending.payload, activePending.requestId, true)}
+          warning={activePending.error.warning}
+        />
+      ) : (
+        <div className="service-form-actions">
+          <button
+            className="secondary-button"
+            disabled={isSubmitting}
+            onClick={onCancel}
+            type="button"
+          >
+            Cancelar
+          </button>
+          <button
+            disabled={isSubmitting || !canChooseStart(availability, useCustomTime, serviceId, date)}
+            type="submit"
+          >
+            {isSubmitting ? "Salvando…" : "Confirmar agendamento"}
+          </button>
+        </div>
+      )}
     </form>
   );
 }
@@ -396,7 +535,7 @@ export function BlockForm({ defaultDate, onCancel, onCreated }: BlockFormProps) 
       const data = (await response.json()) as { timeBlock: TimeBlock };
       onCreated(data.timeBlock);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível bloquear o horário.");
+      setMessage(toUserMessage(error, "Não foi possível bloquear o horário."));
     } finally {
       setIsSubmitting(false);
     }
@@ -498,7 +637,7 @@ export function AttendanceForm({ appointment, mode, onCancel, onSaved }: Attenda
       const data = (await response.json()) as { appointment: Appointment };
       onSaved(data.appointment);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível salvar.");
+      setMessage(toUserMessage(error, "Não foi possível salvar."));
     } finally {
       setIsSubmitting(false);
     }
@@ -567,7 +706,15 @@ export function AttendanceForm({ appointment, mode, onCancel, onSaved }: Attenda
   );
 }
 
-type RescheduleFields = { serviceId: string; date: string; startAt: string };
+type RescheduleFields = {
+  serviceId: string;
+  date: string;
+  startAt: string;
+  useCustomTime: boolean;
+  customTime: string;
+};
+
+type ReschedulePayload = { startAt: string; serviceId?: string };
 
 type RescheduleFormProps = {
   appointment: Appointment;
@@ -579,15 +726,25 @@ type RescheduleFormProps = {
 export function RescheduleForm({ appointment, onCancel, onSaved }: RescheduleFormProps) {
   const current = appointment.serviceSnapshot;
   const form = useForm<RescheduleFields>({
-    defaultValues: { serviceId: current.serviceId, date: appointment.localDate, startAt: "" },
+    defaultValues: {
+      serviceId: current.serviceId,
+      date: appointment.localDate,
+      startAt: "",
+      useCustomTime: false,
+      customTime: "",
+    },
   });
   const { control, setValue } = form;
   const serviceId = useWatch({ control, name: "serviceId" });
   const date = useWatch({ control, name: "date" });
+  const useCustomTime = useWatch({ control, name: "useCustomTime" });
   const { services } = useBookableServices();
   const { availability, queryKey, refresh } = useAvailability(serviceId, date, appointment.id);
   const [message, setMessage] = useState<string>();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pending, setPending] = useState<
+    PendingOverride<ReschedulePayload> & { formKey: string }
+  >();
   const titleId = `reschedule-${appointment.id}`;
   const otherServices = services?.filter((service) => service.id !== current.serviceId) ?? [];
 
@@ -595,7 +752,11 @@ export function RescheduleForm({ appointment, onCancel, onSaved }: RescheduleFor
     setValue("startAt", "");
   }, [queryKey, setValue]);
 
-  async function submit(fields: RescheduleFields) {
+  // Any edit invalidates the exception the professional was asked to confirm.
+  const formKey = JSON.stringify(useWatch({ control }));
+  const activePending = pending?.formKey === formKey ? pending : undefined;
+
+  async function send(payload: ReschedulePayload, allowExceptions: boolean) {
     setIsSubmitting(true);
     setMessage(undefined);
     try {
@@ -603,8 +764,8 @@ export function RescheduleForm({ appointment, onCancel, onSaved }: RescheduleFor
         `/api/admin/appointments/${encodeURIComponent(appointment.id)}/reschedule`,
         {
           body: JSON.stringify({
-            startAt: fields.startAt,
-            ...(fields.serviceId !== current.serviceId ? { serviceId: fields.serviceId } : {}),
+            ...payload,
+            ...(allowExceptions ? { allowExceptions: true } : {}),
           }),
           headers: { "Content-Type": "application/json" },
           method: "POST",
@@ -612,6 +773,17 @@ export function RescheduleForm({ appointment, onCancel, onSaved }: RescheduleFor
       );
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { code?: string } | null;
+        const overridable = allowExceptions
+          ? undefined
+          : parseOverridableError(response.status, body);
+        if (overridable) {
+          setPending({
+            ...createPendingOverride(overridable, payload, () => crypto.randomUUID()),
+            formKey,
+          });
+          return;
+        }
+        setPending(undefined);
         if (body?.code === "CONFLICT") refresh();
         setMessage(getAgendaErrorMessage(body, "Não foi possível reagendar."));
         return;
@@ -619,10 +791,25 @@ export function RescheduleForm({ appointment, onCancel, onSaved }: RescheduleFor
       const data = (await response.json()) as { appointment: Appointment };
       onSaved(data.appointment);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível reagendar.");
+      setMessage(toUserMessage(error, "Não foi possível reagendar."));
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function submit(fields: RescheduleFields) {
+    const start = resolveStartAt(fields);
+    if ("error" in start) {
+      setMessage(start.error);
+      return;
+    }
+    await send(
+      {
+        startAt: start.startAt,
+        ...(fields.serviceId !== current.serviceId ? { serviceId: fields.serviceId } : {}),
+      },
+      false,
+    );
   }
 
   return (
@@ -649,31 +836,46 @@ export function RescheduleForm({ appointment, onCancel, onSaved }: RescheduleFor
       </div>
       <SlotPicker
         availability={availability}
+        customTime={form.register("customTime")}
+        customToggle={form.register("useCustomTime")}
         hint={
           serviceId === current.serviceId
             ? "Mantém a duração e o preço já informados à cliente."
             : "Trocar o serviço atualiza duração e preço inicial."
         }
         onRetry={refresh}
-        registration={form.register("startAt", { required: true })}
+        registration={form.register("startAt")}
+        useCustomTime={useCustomTime}
       />
       <p className="agenda-hint">
         Lembrete e confirmação de presença voltam a ficar pendentes quando o horário muda.
       </p>
       {message ? <p role="alert">{message}</p> : null}
-      <div className="service-form-actions">
-        <button
-          className="secondary-button"
-          disabled={isSubmitting}
-          onClick={onCancel}
-          type="button"
-        >
-          Voltar
-        </button>
-        <button disabled={isSubmitting || availability.status !== "ready"} type="submit">
-          {isSubmitting ? "Salvando…" : "Salvar novo horário"}
-        </button>
-      </div>
+      {activePending ? (
+        <ExceptionNotice
+          isSubmitting={isSubmitting}
+          onBack={() => setPending(undefined)}
+          onConfirm={() => void send(activePending.payload, true)}
+          warning={activePending.error.warning}
+        />
+      ) : (
+        <div className="service-form-actions">
+          <button
+            className="secondary-button"
+            disabled={isSubmitting}
+            onClick={onCancel}
+            type="button"
+          >
+            Voltar
+          </button>
+          <button
+            disabled={isSubmitting || !canChooseStart(availability, useCustomTime, serviceId, date)}
+            type="submit"
+          >
+            {isSubmitting ? "Salvando…" : "Salvar novo horário"}
+          </button>
+        </div>
+      )}
     </form>
   );
 }

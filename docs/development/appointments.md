@@ -2,21 +2,21 @@
 
 Todas as operações usam autenticação administrativa já existente e derivam salão e usuário do contexto verificado. As respostas têm `Cache-Control: no-store`. IDs não podem conter `/` e têm até 128 caracteres; queries e objetos são estritos, inclusive sem parâmetros duplicados.
 
-| Método e caminho                                                             | Entrada                   | Resposta                                            |
-| ---------------------------------------------------------------------------- | ------------------------- | --------------------------------------------------- |
-| GET `/api/admin/appointments?date=2026-11-12`                                | data local                | `{ date, timezone, appointments, timeBlocks }`      |
-| GET `/api/admin/appointments?from=2026-11-09&to=2026-11-15`                  | período local             | `{ from, to, timezone, appointments, timeBlocks }`  |
-| GET `/api/admin/appointments/availability?date=2026-11-12&serviceId=servico` | data local e serviço      | data, fuso, serviço, duração, intervalo e `windows` |
-| POST `/api/admin/appointments`                                               | JSON abaixo               | `{ appointment, replayed }`, 201 ou 200             |
-| POST `/api/admin/appointments/[appointmentId]/cancel`                        | identificador na URL      | `{ appointment }`, 200                              |
-| POST `/api/admin/appointments/[appointmentId]/complete`                      | `{}` ou `{ payment }`     | `{ appointment }`, 200                              |
-| POST `/api/admin/appointments/[appointmentId]/no-show`                       | identificador na URL      | `{ appointment }`, 200                              |
-| POST `/api/admin/appointments/[appointmentId]/payment`                       | `payment` (abaixo)        | `{ appointment }`, 200                              |
-| POST `/api/admin/appointments/[appointmentId]/reschedule`                    | `{ startAt, serviceId? }` | `{ appointment }`, 200                              |
-| POST `/api/admin/appointments/[appointmentId]/reminder-sent`                 | identificador na URL      | `{ appointment }`, 200                              |
-| POST `/api/admin/appointments/[appointmentId]/client-confirmation`           | identificador na URL      | `{ appointment }`, 200                              |
-| POST `/api/admin/time-blocks`                                                | JSON abaixo               | `{ timeBlock, replayed }`, 201 ou 200               |
-| POST `/api/admin/time-blocks/[blockId]/cancel`                               | identificador na URL      | `{ timeBlock }`, 200                                |
+| Método e caminho                                                             | Entrada                                     | Resposta                                            |
+| ---------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------- |
+| GET `/api/admin/appointments?date=2026-11-12`                                | data local                                  | `{ date, timezone, appointments, timeBlocks }`      |
+| GET `/api/admin/appointments?from=2026-11-09&to=2026-11-15`                  | período local                               | `{ from, to, timezone, appointments, timeBlocks }`  |
+| GET `/api/admin/appointments/availability?date=2026-11-12&serviceId=servico` | data local e serviço                        | data, fuso, serviço, duração, intervalo e `windows` |
+| POST `/api/admin/appointments`                                               | JSON abaixo                                 | `{ appointment, replayed }`, 201 ou 200             |
+| POST `/api/admin/appointments/[appointmentId]/cancel`                        | identificador na URL                        | `{ appointment }`, 200                              |
+| POST `/api/admin/appointments/[appointmentId]/complete`                      | `{}` ou `{ payment }`                       | `{ appointment }`, 200                              |
+| POST `/api/admin/appointments/[appointmentId]/no-show`                       | identificador na URL                        | `{ appointment }`, 200                              |
+| POST `/api/admin/appointments/[appointmentId]/payment`                       | `payment` (abaixo)                          | `{ appointment }`, 200                              |
+| POST `/api/admin/appointments/[appointmentId]/reschedule`                    | `{ startAt, serviceId?, allowExceptions? }` | `{ appointment }`, 200                              |
+| POST `/api/admin/appointments/[appointmentId]/reminder-sent`                 | identificador na URL                        | `{ appointment }`, 200                              |
+| POST `/api/admin/appointments/[appointmentId]/client-confirmation`           | identificador na URL                        | `{ appointment }`, 200                              |
+| POST `/api/admin/time-blocks`                                                | JSON abaixo                                 | `{ timeBlock, replayed }`, 201 ou 200               |
+| POST `/api/admin/time-blocks/[blockId]/cancel`                               | identificador na URL                        | `{ timeBlock }`, 200                                |
 
 Exemplos fictícios:
 
@@ -40,6 +40,33 @@ Exemplos fictícios:
 ```
 
 Os instantes são UTC com precisão de minuto, datas e expediente usam `America/Sao_Paulo`, e disponibilidade retorna janelas livres com último início possível. A reserva inclui a pausa na ocupação e a transação revalida o serviço e o expediente. Um UUID repetido com o mesmo conteúdo retorna o registro original (também se cancelado); conteúdo diferente gera conflito. Cancelamentos são idempotentes. Bloqueios são diários, simples e podem cobrir o dia inteiro.
+
+### Exceções administrativas
+
+`POST /api/admin/appointments` e `.../reschedule` aceitam `allowExceptions: boolean` (opcional, padrão `false`), que entra no fingerprint de idempotência (use novo `requestId` ao reenviar com a exceção). Com `true`, ignoram só os limites de expediente/dia não útil e a restrição de avaliação; conflito, bloqueio, serviço inativo, intervalo inválido e atendimento que atravessa a meia-noite local continuam proibidos. O agendamento guarda `exceptions` (`"outsideBusinessHours" | "requiresEvaluation"`, só as usadas) e a resposta o expõe; documentos antigos sem o campo são lidos como `[]`. O status segue `confirmed`.
+
+```json
+{
+  "requestId": "123e4567-e89b-42d3-a456-426614174002",
+  "serviceId": "servico-com-avaliacao",
+  "startAt": "2026-11-12T22:30:00Z",
+  "client": { "name": "Exemplo", "phone": "11999999999" },
+  "source": "whatsapp",
+  "allowExceptions": true
+}
+```
+
+Erros 409 contornáveis incluem `overridable: true`:
+
+```json
+{ "error": "Não foi possível concluir a operação.", "code": "OUTSIDE_BUSINESS_HOURS", "overridable": true }
+{ "error": "Não foi possível concluir a operação.", "code": "SERVICE_REQUIRES_EVALUATION", "overridable": true }
+{ "error": "Não foi possível concluir a operação.", "code": "SERVICE_INACTIVE" }
+```
+
+### Segurança das mutações administrativas
+
+Toda requisição `POST`/`PUT`/`PATCH`/`DELETE` em `/api/admin/*` exige cabeçalho `Origin` igual ao host que recebeu a requisição (403 caso contrário), verificado em `authenticateAdmin`. Rotas com corpo exigem `Content-Type: application/json` (415 caso contrário). As respostas de serviços e expediente também usam `Cache-Control: no-store`. `DELETE /api/auth/session` revoga os refresh tokens do usuário quando o cookie é válido e sempre apaga o cookie.
 
 JSON malformado retorna 400; autenticação/autorização 401/403; recurso ausente ou fora do salão 404; validação e período inválido 422; conflito, serviço inelegível, fora do expediente ou UUID divergente 409. Falhas internas retornam 500 genérico sem dados pessoais. Não há limite artificial de antecedência. O fluxo público, cadastro separado de clientes, recorrência, férias, reagendamento e pagamentos ainda não estão implementados neste marco.
 

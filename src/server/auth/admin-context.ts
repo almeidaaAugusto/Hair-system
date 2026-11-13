@@ -1,6 +1,7 @@
 import { getAuth } from "firebase-admin/auth";
 
 import { getAdminApp } from "@/server/firebase/admin";
+import { isMutatingMethod, isSameOrigin } from "@/server/http/request-guards";
 
 import { getAdminSessionCookie, verifyAdminSessionCookie } from "./admin-session";
 
@@ -95,6 +96,10 @@ export async function verifyAdminIdToken(
 }
 
 export async function authenticateAdmin(request: Request): Promise<AdminContext> {
+  // Every administrative mutation must come from this site (CSRF defense in depth).
+  if (isMutatingMethod(request.method) && !isSameOrigin(request)) {
+    throw new AuthorizationError("Requisição administrativa não autorizada.", 403);
+  }
   const authorization = request.headers.get("authorization");
   if (authorization !== null) {
     return (await verifyAdminIdToken(getBearerToken(authorization))).admin;

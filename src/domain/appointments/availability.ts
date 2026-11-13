@@ -15,6 +15,7 @@ import {
   timeBlockSchema,
   utcMinuteSchema,
   type Appointment,
+  type AppointmentException,
   type CreateAppointmentInput,
   type CreateTimeBlockInput,
   type TimeBlock,
@@ -46,7 +47,12 @@ export function intervalsOverlap(a: Interval, b: Interval): boolean {
   return first.start < second.end && second.start < first.end;
 }
 
-function resolveHours({ service, businessHours }: ServiceContext): BusinessHours {
+type ServicePolicy = "availability" | { allowEvaluation: boolean };
+
+function resolveHours(
+  { service, businessHours }: ServiceContext,
+  policy: ServicePolicy = "availability",
+): BusinessHours {
   if (
     businessHours &&
     (businessHours.salonId !== service.salonId ||
@@ -62,11 +68,24 @@ function resolveHours({ service, businessHours }: ServiceContext): BusinessHours
     requiresEvaluation: service.requiresEvaluation,
     isActive: service.isActive,
   });
-  if (!service.isActive || service.requiresEvaluation) {
-    throw new AppointmentRuleError(
-      "SERVICE_UNAVAILABLE",
-      "O serviço não está disponível para confirmação.",
-    );
+  if (policy === "availability") {
+    if (!service.isActive || service.requiresEvaluation) {
+      throw new AppointmentRuleError(
+        "SERVICE_UNAVAILABLE",
+        "O serviço não está disponível para confirmação.",
+      );
+    }
+  } else {
+    // An inactive service can never be booked, not even with administrative exceptions.
+    if (!service.isActive) {
+      throw new AppointmentRuleError("SERVICE_INACTIVE", "O serviço está inativo.");
+    }
+    if (service.requiresEvaluation && !policy.allowEvaluation) {
+      throw new AppointmentRuleError(
+        "SERVICE_REQUIRES_EVALUATION",
+        "O serviço exige avaliação prévia.",
+      );
+    }
   }
   return businessHoursSchema.parse(
     businessHours ?? {
@@ -177,6 +196,7 @@ type SlotPlan = Pick<
   | "occupiedUntilAt"
   | "serviceSnapshot"
   | "appointmentIntervalMinutes"
+  | "exceptions"
 >;
 
 /**
@@ -184,9 +204,13 @@ type SlotPlan = Pick<
  * occupation, returning the period and snapshots a confirmed appointment keeps.
  */
 function planSlot(
-  command: Occupation & ServiceContext & { salonId: string; startAt: string },
+  command: Occupation &
+    ServiceContext & { salonId: string; startAt: string; allowExceptions?: boolean },
 ): SlotPlan {
-  const hours = resolveHours(command);
+  const allowExceptions = command.allowExceptions === true;
+  const exceptions: AppointmentException[] = [];
+  const hours = resolveHours(command, { allowEvaluation: allowExceptions });
+  if (command.service.requiresEvaluation) exceptions.push("requiresEvaluation");
   const date = getLocalDate(command.startAt);
   const working = workingInterval(date, hours);
   const start = Date.parse(command.startAt);
@@ -196,13 +220,23 @@ function planSlot(
     start < Date.parse(working.startAt) ||
     duration > (Date.parse(working.endAt) - start) / 60_000
   ) {
-    throw new AppointmentRuleError(
-      "OUTSIDE_BUSINESS_HOURS",
-      "Toda a duração e o intervalo devem caber no expediente.",
-    );
+    if (!allowExceptions) {
+      throw new AppointmentRuleError(
+        "OUTSIDE_BUSINESS_HOURS",
+        "Toda a duração e o intervalo devem caber no expediente.",
+      );
+    }
+    exceptions.push("outsideBusinessHours");
   }
   const endAt = new Date(start + command.service.durationMinutes * 60_000).toISOString();
   const occupiedUntilAt = new Date(start + duration * 60_000).toISOString();
+  // The day lock is per local day: the whole occupied period must stay inside it.
+  if (Date.parse(occupiedUntilAt) > Date.parse(getLocalDayBounds(date).endAt)) {
+    throw new AppointmentRuleError(
+      "INVALID_TIME_RANGE",
+      "O atendimento deve começar e terminar no mesmo dia.",
+    );
+  }
   assertNoConflict(
     { startAt: command.startAt, endAt: occupiedUntilAt },
     command.salonId,
@@ -224,6 +258,7 @@ function planSlot(
       requiresEvaluation: service.requiresEvaluation,
     },
     appointmentIntervalMinutes: hours.appointmentIntervalMinutes,
+    exceptions,
   };
 }
 
@@ -238,7 +273,11 @@ export function buildAppointment(
     id: command.id,
     salonId: command.salonId,
     professionalId: DEFAULT_PROFESSIONAL_ID,
-    ...planSlot({ ...command, startAt: input.startAt }),
+    ...planSlot({
+      ...command,
+      startAt: input.startAt,
+      allowExceptions: input.allowExceptions === true,
+    }),
     status: "confirmed",
     client: input.client,
     source: input.source,
@@ -254,6 +293,7 @@ export type RescheduleCommand = Occupation &
     userId: string;
     now: string;
     startAt: string;
+    allowExceptions?: boolean;
     /** Current business hours; required to recompute the occupied period. */
     businessHours?: BusinessHours | null;
   };
@@ -293,6 +333,7 @@ export function rescheduleAppointment(
     service,
     businessHours: command.businessHours,
     startAt,
+    allowExceptions: command.allowExceptions,
     appointments: command.appointments.filter((other) => other.id !== appointment.id),
     timeBlocks: command.timeBlocks,
   });
@@ -301,7 +342,8 @@ export function rescheduleAppointment(
     plan.occupiedUntilAt === appointment.occupiedUntilAt &&
     (Object.keys(plan.serviceSnapshot) as (keyof SlotPlan["serviceSnapshot"])[]).every(
       (key) => plan.serviceSnapshot[key] === appointment.serviceSnapshot[key],
-    );
+    ) &&
+    plan.exceptions.join() === appointment.exceptions.join();
   if (unchanged) return null;
   // A new time needs a new reminder and a new confirmation from the client.
   const { reminderSentAt, clientConfirmedAt, ...rest } = appointment;

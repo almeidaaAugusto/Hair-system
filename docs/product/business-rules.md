@@ -65,7 +65,18 @@
 
 ## Decisões para a agenda administrativa
 
+### Exceções administrativas no cadastro manual
+
+A profissional precisa lançar clientes já combinadas pelo WhatsApp, mesmo fora do expediente ou para serviços que exigem avaliação. Por isso, ao criar ou reagendar/trocar serviço pelo painel, ela pode confirmar explicitamente uma exceção (`allowExceptions: true`):
+
+- A exceção dispensa apenas (a) os limites de expediente e dia não útil e (b) a restrição de avaliação do serviço.
+- Continuam sempre proibidos: conflito com outro atendimento (incluindo o intervalo de 10 minutos), sobreposição com bloqueio, serviço inativo, intervalo inválido e atendimento que não começa e termina no mesmo dia local (`America/Sao_Paulo`).
+- O agendamento guarda `exceptions` (`outsideBusinessHours`, `requiresEvaluation`) com somente as exceções efetivamente usadas; é vazio quando nenhuma foi necessária. Ao reagendar, o campo é recalculado.
+- Um agendamento de serviço com avaliação criado com exceção fica com o mesmo status de qualquer agendamento manual (`confirmed`): é decisão humana da profissional, não confirmação automática do sistema. A página pública continua sem confirmar serviços com avaliação.
+- Sem a exceção, os erros são distinguíveis: `OUTSIDE_BUSINESS_HOURS` e `SERVICE_REQUIRES_EVALUATION` (ambos contornáveis, `overridable: true`) e `SERVICE_INACTIVE` (nunca contornável).
+- A consulta de horários livres não muda: continua respeitando expediente e recusando serviços com avaliação.
+
 - Não há antecedência mínima ou máxima artificial. O cancelamento é efetivado pela profissional.
 - Bloqueios são manuais e simples, podem cobrir um dia inteiro e não podem colidir com ocupações ativas; recorrência e férias ficam para depois.
 - O intervalo completo, inclusive a pausa configurada, cabe no expediente. Reservas confirmadas e bloqueios ativos ocupam períodos semiabertos; cancelados liberam o horário.
-- Serviços inativos ou que exigem avaliação não são confirmados neste comando. A reserva guarda nome e telefone como snapshots mínimos, sem cadastro separado de clientes.
+- Serviços inativos ou que exigem avaliação não são confirmados neste comando (salvo pela exceção administrativa abaixo). A reserva guarda nome e telefone como snapshots mínimos, sem cadastro separado de clientes.

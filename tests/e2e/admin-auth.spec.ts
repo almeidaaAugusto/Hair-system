@@ -224,9 +224,14 @@ for (const failure of ["HTTP 500", "network rejection"] as const) {
         sunday: { isOpen: true, startLocalTime: "12:00", endLocalTime: "16:00" },
       },
     };
-    expect((await page.request.put("/api/admin/business-hours", { data: existing })).status()).toBe(
-      200,
-    );
+    expect(
+      (
+        await page.request.put("/api/admin/business-hours", {
+          data: existing,
+          headers: { Origin: "http://127.0.0.1:3101" },
+        })
+      ).status(),
+    ).toBe(200);
     let failGet = true;
     const submitted: unknown[] = [];
     await page.route("**/api/admin/business-hours", async (route) => {
@@ -242,7 +247,10 @@ for (const failure of ["HTTP 500", "network rejection"] as const) {
 
     await page.goto("/admin/business-hours");
     const error = page.getByRole("status").filter({
-      hasText: failure === "HTTP 500" ? "Falha temporária no expediente." : /fetch|carregar/i,
+      hasText:
+        failure === "HTTP 500"
+          ? "Falha temporária no expediente."
+          : "Sem conexão. Verifique a internet e tente novamente.",
     });
     await expect(error).toBeVisible();
     const form = page.locator("form");

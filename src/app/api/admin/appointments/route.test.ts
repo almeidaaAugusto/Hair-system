@@ -60,7 +60,11 @@ const req = (url: string, body?: unknown) =>
     `http://localhost${url}`,
     body === undefined
       ? {}
-      : { method: "POST", body: typeof body === "string" ? body : JSON.stringify(body) },
+      : {
+          method: "POST",
+          body: typeof body === "string" ? body : JSON.stringify(body),
+          headers: { "Content-Type": "application/json" },
+        },
   );
 describe("administrative appointment HTTP API", () => {
   beforeEach(() => {
@@ -304,6 +308,8 @@ describe("administrative appointment HTTP API", () => {
     ["NOT_FOUND", 404],
     ["INVALID_TIME_RANGE", 422],
     ["SERVICE_UNAVAILABLE", 409],
+    ["SERVICE_INACTIVE", 409],
+    ["SERVICE_REQUIRES_EVALUATION", 409],
     ["OUTSIDE_BUSINESS_HOURS", 409],
     ["CONFLICT", 409],
     ["IDEMPOTENCY_CONFLICT", 409],
@@ -324,4 +330,56 @@ describe("administrative appointment HTTP API", () => {
       expect(m.log).toHaveBeenCalled();
     },
   );
+  it.each(["OUTSIDE_BUSINESS_HOURS", "SERVICE_REQUIRES_EVALUATION"] as const)(
+    "flags %s as overridable",
+    async (code) => {
+      m.repo.reserve.mockRejectedValue(new AppointmentRuleError(code, "private"));
+      const r = await POST(req("/x", input));
+      expect(r.status).toBe(409);
+      expect(await r.json()).toEqual({
+        error: "Não foi possível concluir a operação.",
+        code,
+        overridable: true,
+      });
+    },
+  );
+  it("never flags an inactive service as overridable", async () => {
+    m.repo.reserve.mockRejectedValue(new AppointmentRuleError("SERVICE_INACTIVE", "private"));
+    const r = await POST(req("/x", input));
+    expect(await r.json()).toEqual({
+      error: "Não foi possível concluir a operação.",
+      code: "SERVICE_INACTIVE",
+    });
+  });
+  it("passes allowExceptions to the repository and rejects non-boolean values", async () => {
+    m.repo.reserve.mockResolvedValue({ appointment: { exceptions: [] }, replayed: false });
+    await POST(req("/x", { ...input, allowExceptions: true }));
+    expect(m.repo.reserve).toHaveBeenCalledWith(
+      "salon",
+      "admin",
+      expect.objectContaining({ allowExceptions: true }),
+    );
+    expect((await POST(req("/x", { ...input, allowExceptions: "yes" }))).status).toBe(422);
+    m.repo.reschedule.mockResolvedValue({ exceptions: [] });
+    await reschedule(req("/x", { startAt: input.startAt, allowExceptions: true }), {
+      params: Promise.resolve({ appointmentId: "a" }),
+    });
+    expect(m.repo.reschedule).toHaveBeenCalledWith(
+      "salon",
+      "admin",
+      "a",
+      expect.objectContaining({ allowExceptions: true }),
+    );
+  });
+  it("requires a JSON content type on bodies", async () => {
+    const r = await POST(
+      new Request("http://localhost/x", {
+        method: "POST",
+        body: JSON.stringify(input),
+        headers: { "Content-Type": "text/plain" },
+      }),
+    );
+    expect(r.status).toBe(415);
+    expect(m.repo.reserve).not.toHaveBeenCalled();
+  });
 });

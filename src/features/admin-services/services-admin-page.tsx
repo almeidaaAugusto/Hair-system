@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 
 import type { CreateServiceInput, Service } from "@/domain/services/service";
 import { fetchAdmin } from "@/features/admin-auth/admin-api-client";
+import { UserMessageError, toUserMessage } from "@/features/shared/user-message";
 import { AdminNavigation } from "@/features/admin-auth/admin-navigation";
 import { formatBrazilianReal, parseBrazilianRealToCents } from "@/features/admin-services/money";
 
@@ -140,16 +141,14 @@ export function ServicesAdminPage() {
       setMessage(undefined);
       try {
         const response = await fetchAdmin("/api/admin/services");
-        if (!response.ok) throw new Error(await readError(response));
+        if (!response.ok) throw new UserMessageError(await readError(response));
         const data = (await response.json()) as { services: Service[] };
         if (isMounted) {
           setServices(data.services.sort((a, b) => a.name.localeCompare(b.name)));
         }
       } catch (error) {
         if (isMounted) {
-          setMessage(
-            error instanceof Error ? error.message : "Não foi possível carregar os serviços.",
-          );
+          setMessage(toUserMessage(error, "Não foi possível carregar os serviços."));
         }
       } finally {
         if (isMounted) setIsLoadingServices(false);
@@ -198,7 +197,7 @@ export function ServicesAdminPage() {
           method: currentService ? "PATCH" : "POST",
         },
       );
-      if (!response.ok) throw new Error(await readError(response));
+      if (!response.ok) throw new UserMessageError(await readError(response));
       const data = (await response.json()) as { service: Service };
       setServices((current) =>
         (currentService
@@ -211,7 +210,7 @@ export function ServicesAdminPage() {
         currentService ? "Serviço atualizado com sucesso." : "Serviço cadastrado com sucesso.",
       );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível salvar o serviço.");
+      setMessage(toUserMessage(error, "Não foi possível salvar o serviço."));
     } finally {
       setIsSaving(false);
     }
@@ -233,7 +232,7 @@ export function ServicesAdminPage() {
         headers: { "Content-Type": "application/json" },
         method: "PATCH",
       });
-      if (!response.ok) throw new Error(await readError(response));
+      if (!response.ok) throw new UserMessageError(await readError(response));
       const data = (await response.json()) as { service: Service };
       setServices((current) =>
         current.map((currentService) =>
@@ -242,7 +241,7 @@ export function ServicesAdminPage() {
       );
       setMessage(service.isActive ? "Serviço desativado." : "Serviço reativado.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível atualizar o serviço.");
+      setMessage(toUserMessage(error, "Não foi possível atualizar o serviço."));
     } finally {
       setIsSaving(false);
     }

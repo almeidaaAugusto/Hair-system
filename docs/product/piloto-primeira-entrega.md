@@ -11,6 +11,7 @@ Colocar o painel administrativo nas mãos da profissional por 1–2 semanas de u
 - Expediente semanal e intervalo entre atendimentos (padrão: segunda a sábado, 09:00–20:00, 10 minutos).
 - Agenda dia/semana/mês; novo agendamento manual com horários livres; bloqueio de horário ou dia inteiro.
 - Reagendar e trocar serviço; cancelar; concluir; marcar falta.
+- Exceções administrativas no cadastro manual: lançar horário fora do expediente ou serviço com avaliação, com confirmação explícita da profissional (registrado no agendamento); conflitos e bloqueios continuam proibidos.
 - Pagamento: valor final, valor pago, forma (Pix, dinheiro, débito, crédito), saldo e estado financeiro.
 - Financeiro do dia/semana/mês: recebido (só concluído e integralmente pago), em aberto, faltas, por forma e por serviço.
 - WhatsApp: mensagens prontas de confirmação, lembrete e pós-atendimento; painel de lembretes das próximas 24 horas; registro de lembrete enviado e de presença confirmada.
@@ -28,10 +29,12 @@ Colocar o painel administrativo nas mãos da profissional por 1–2 semanas de u
 1. Revisar e integrar o código (branch e PR) e publicar na Vercel.
 2. Definir o projeto Firebase do piloto. Como serão dados reais de clientes, preferir um projeto separado do usado em testes manuais.
 3. Na Vercel, configurar `FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID` e `FIREBASE_SERVICE_ACCOUNT_JSON` (privada).
+   As duas variáveis do servidor e as três públicas devem apontar para o **mesmo** projeto Firebase do piloto (`hair-sys-piloto`); confira o `project_id` dentro do JSON da conta de serviço.
 4. Publicar regras e índices: `npx firebase deploy --only firestore:rules,firestore:indexes --project <projeto>`. Sem os índices, a agenda não carrega.
 5. Criar a conta da profissional em Firebase Authentication e liberar o acesso: `npm run firebase:set-admin -- email@exemplo.com <id-do-salao>`.
 6. Abrir o sistema no celular dela, entrar uma vez e adicionar o endereço à tela inicial.
 7. Cadastrar junto com ela os serviços reais e conferir o expediente.
+8. Smoke test em produção: entrar, abrir a Agenda, salvar o expediente e criar e cancelar um agendamento de teste. Conferir nos logs da Vercel que não houve 403 nem 500.
 
 ## Roteiro de uso para a profissional
 

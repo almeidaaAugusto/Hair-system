@@ -10,6 +10,7 @@ import {
   type BusinessHoursInput,
 } from "@/domain/business-hours/business-hours";
 import { fetchAdmin } from "@/features/admin-auth/admin-api-client";
+import { UserMessageError, toUserMessage } from "@/features/shared/user-message";
 import { AdminNavigation } from "@/features/admin-auth/admin-navigation";
 
 type Weekday = keyof BusinessHoursInput["weeklyHours"];
@@ -54,7 +55,7 @@ export function BusinessHoursAdminPage() {
       setMessage(undefined);
       try {
         const response = await fetchAdmin("/api/admin/business-hours");
-        if (!response.ok) throw new Error(await readError(response));
+        if (!response.ok) throw new UserMessageError(await readError(response));
         const data = (await response.json()) as { businessHours: BusinessHours };
         if (isMounted) {
           resetBusinessHours(data.businessHours);
@@ -62,9 +63,7 @@ export function BusinessHoursAdminPage() {
         }
       } catch (error) {
         if (isMounted) {
-          setMessage(
-            error instanceof Error ? error.message : "Não foi possível carregar o expediente.",
-          );
+          setMessage(toUserMessage(error, "Não foi possível carregar o expediente."));
         }
       } finally {
         if (isMounted) setIsLoading(false);
@@ -95,15 +94,13 @@ export function BusinessHoursAdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validation.data),
       });
-      if (!response.ok) throw new Error(await readError(response));
+      if (!response.ok) throw new UserMessageError(await readError(response));
       const data = (await response.json()) as { businessHours: BusinessHours };
 
       resetBusinessHours(data.businessHours);
       setMessage("Expediente atualizado com sucesso.");
     } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "Não foi possível atualizar o expediente.",
-      );
+      setMessage(toUserMessage(error, "Não foi possível atualizar o expediente."));
     } finally {
       setIsSaving(false);
     }

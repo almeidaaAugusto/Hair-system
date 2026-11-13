@@ -64,6 +64,7 @@ const appointment: Appointment = {
   },
   appointmentIntervalMinutes: 10,
   source: "manual",
+  exceptions: [],
   createdBy: "admin",
   updatedBy: "admin",
   createdAt: now,
@@ -423,7 +424,11 @@ describe("appointment builder", () => {
     );
     expectRule(
       () => buildAppointment({ ...command, service: { ...service, requiresEvaluation: true } }),
-      "SERVICE_UNAVAILABLE",
+      "SERVICE_REQUIRES_EVALUATION",
+    );
+    expectRule(
+      () => buildAppointment({ ...command, service: { ...service, isActive: false } }),
+      "SERVICE_INACTIVE",
     );
   });
 });

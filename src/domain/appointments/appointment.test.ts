@@ -145,7 +145,7 @@ describe("persisted records", () => {
   };
 
   it("reads complete records and retains subminute audit precision", () => {
-    expect(appointmentSchema.parse(appointment)).toEqual(appointment);
+    expect(appointmentSchema.parse(appointment)).toEqual({ ...appointment, exceptions: [] });
     expect(timeBlockSchema.parse({ ...common, status: "active" })).toEqual({
       ...common,
       status: "active",

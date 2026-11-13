@@ -6,6 +6,8 @@ import {
   updateBusinessHours,
 } from "@/server/business-hours/configure-business-hours";
 import { createFirestoreBusinessHoursRepository } from "@/server/business-hours/business-hours-repository";
+import { noStoreJson } from "@/server/http/json-response";
+import { RequestGuardError, readJsonBody } from "@/server/http/request-guards";
 import { logUnexpectedServerError } from "@/server/observability/log-unexpected-server-error";
 
 export const dynamic = "force-dynamic";
@@ -13,19 +15,19 @@ export const runtime = "nodejs";
 
 function errorResponse(error: unknown): Response {
   if (error instanceof AuthorizationError) {
-    return Response.json({ error: error.message }, { status: error.status });
+    return noStoreJson({ error: error.message }, error.status);
+  }
+  if (error instanceof RequestGuardError) {
+    return noStoreJson({ error: error.message }, error.status);
   }
   if (error instanceof ZodError) {
-    return Response.json(
-      { error: "Dados do expediente inválidos.", details: error.flatten() },
-      { status: 422 },
-    );
+    return noStoreJson({ error: "Dados do expediente inválidos.", details: error.flatten() }, 422);
   }
   if (error instanceof SyntaxError) {
-    return Response.json({ error: "Corpo da requisição inválido." }, { status: 400 });
+    return noStoreJson({ error: "Corpo da requisição inválido." }, 400);
   }
   logUnexpectedServerError("/api/admin/business-hours", error);
-  return Response.json({ error: "Não foi possível concluir a operação." }, { status: 500 });
+  return noStoreJson({ error: "Não foi possível concluir a operação." }, 500);
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -35,7 +37,7 @@ export async function GET(request: Request): Promise<Response> {
       admin,
       createFirestoreBusinessHoursRepository(),
     );
-    return Response.json({ businessHours });
+    return noStoreJson({ businessHours });
   } catch (error) {
     return errorResponse(error);
   }
@@ -44,13 +46,13 @@ export async function GET(request: Request): Promise<Response> {
 export async function PUT(request: Request): Promise<Response> {
   try {
     const admin = await authenticateAdmin(request);
-    const input = await request.json();
+    const input = await readJsonBody(request);
     const businessHours = await updateBusinessHours(
       input,
       admin,
       createFirestoreBusinessHoursRepository(),
     );
-    return Response.json({ businessHours });
+    return noStoreJson({ businessHours });
   } catch (error) {
     return errorResponse(error);
   }

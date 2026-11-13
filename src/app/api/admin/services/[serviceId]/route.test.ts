@@ -72,6 +72,7 @@ describe("services administration item route", () => {
     const response = await PATCH(
       new Request("http://localhost/api/admin/services/service-1", {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       }),
       routeContext(),
@@ -91,6 +92,7 @@ describe("services administration item route", () => {
     const response = await PATCH(
       new Request("http://localhost/api/admin/services/service-1", {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       }),
       routeContext(),
@@ -111,6 +113,7 @@ describe("services administration item route", () => {
     const response = await PATCH(
       new Request("http://localhost/api/admin/services/service-1", {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: false }),
       }),
       routeContext(),
@@ -135,6 +138,7 @@ describe("services administration item route", () => {
     const response = await PATCH(
       new Request("http://localhost/api/admin/services/service-1", {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...input, durationMinutes: 0 }),
       }),
       routeContext(),
@@ -149,6 +153,7 @@ describe("services administration item route", () => {
     const response = await PATCH(
       new Request("http://localhost/api/admin/services/service-1", {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: "{",
       }),
       routeContext(),
@@ -165,6 +170,7 @@ describe("services administration item route", () => {
     const response = await PATCH(
       new Request("http://localhost/api/admin/services/service-from-another-salon", {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       }),
       routeContext("service-from-another-salon"),
@@ -181,6 +187,7 @@ describe("services administration item route", () => {
     const response = await PATCH(
       new Request("http://localhost/api/admin/services/service-1", {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       }),
       routeContext(),
@@ -192,5 +199,37 @@ describe("services administration item route", () => {
       "/api/admin/services/[serviceId]",
       unexpectedError,
     );
+  });
+
+  it("answers 404 for an invalid service id without touching the repository", async () => {
+    mocks.authenticateAdmin.mockResolvedValue(admin);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/admin/services/a%2Fb", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      }),
+      routeContext("a/b"),
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(mocks.updateService).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non JSON content type with 415", async () => {
+    mocks.authenticateAdmin.mockResolvedValue(admin);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/admin/services/service-1", {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+      routeContext(),
+    );
+
+    expect(response.status).toBe(415);
+    expect(mocks.updateService).not.toHaveBeenCalled();
   });
 });

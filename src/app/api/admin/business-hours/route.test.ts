@@ -60,6 +60,7 @@ describe("business hours administration route", () => {
     const response = await PUT(
       new Request("http://localhost/api/admin/business-hours", {
         method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       }),
     );
@@ -85,5 +86,19 @@ describe("business hours administration route", () => {
     });
 
     errorLog.mockRestore();
+  });
+
+  it("rejects a non JSON content type with 415 and no-store", async () => {
+    mocks.authenticateAdmin.mockResolvedValue({ salonId: "salon-1", userId: "admin-1" });
+
+    const response = await PUT(
+      new Request("http://localhost/api/admin/business-hours", {
+        method: "PUT",
+        body: "{}",
+      }),
+    );
+
+    expect(response.status).toBe(415);
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 });

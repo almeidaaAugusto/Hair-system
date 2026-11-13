@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { Appointment } from "@/domain/appointments/appointment";
 import { isReminderDue } from "@/domain/appointments/attendance";
 import { fetchAdmin } from "@/features/admin-auth/admin-api-client";
+import { UserMessageError, toUserMessage } from "@/features/shared/user-message";
 
 import {
   addDays,
@@ -39,7 +40,9 @@ export function RemindersPanel({ today, reloadKey, onSend }: RemindersPanelProps
         const response = await fetchAdmin(`/api/admin/appointments?${query}`);
         const body = await response.json().catch(() => null);
         if (!response.ok)
-          throw new Error(getAgendaErrorMessage(body, "Não foi possível carregar os lembretes."));
+          throw new UserMessageError(
+            getAgendaErrorMessage(body, "Não foi possível carregar os lembretes."),
+          );
         if (isMounted)
           setLoaded({
             key: requestKey,
@@ -49,8 +52,7 @@ export function RemindersPanel({ today, reloadKey, onSend }: RemindersPanelProps
         if (isMounted)
           setLoaded({
             key: requestKey,
-            error:
-              error instanceof Error ? error.message : "Não foi possível carregar os lembretes.",
+            error: toUserMessage(error, "Não foi possível carregar os lembretes."),
           });
       }
     })();

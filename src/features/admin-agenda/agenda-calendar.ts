@@ -160,6 +160,8 @@ export function formatPhone(phone: string): string {
 const ruleMessages: Record<AppointmentRuleErrorCode, string> = {
   CONFLICT: "Esse horário já está ocupado. Escolha outro horário.",
   OUTSIDE_BUSINESS_HOURS: "O atendimento precisa começar e terminar dentro do expediente.",
+  SERVICE_INACTIVE: "Esse serviço está inativo.",
+  SERVICE_REQUIRES_EVALUATION: "Esse serviço exige avaliação prévia.",
   SERVICE_UNAVAILABLE: "Esse serviço está inativo ou exige avaliação prévia.",
   IDEMPOTENCY_CONFLICT:
     "Esse envio já foi registrado com outros dados. Abra o formulário novamente.",

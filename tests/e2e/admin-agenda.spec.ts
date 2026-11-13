@@ -277,3 +277,40 @@ test("sends messages, records reminder and confirmation, then reschedules", asyn
   await expect(moved).not.toContainText("Presença confirmada");
   await expect(moved.getByRole("link", { name: "Enviar lembrete" })).toBeVisible();
 });
+
+test("books outside business hours only after confirming the exception", async ({ page }) => {
+  test.setTimeout(120_000);
+  const client = `Excecao ${runId.slice(0, 6)}`;
+  await openAgenda(page);
+
+  await page.getByRole("button", { name: "Novo agendamento" }).click();
+  await page.getByLabel("Serviço").selectOption(serviceId);
+  await page.getByLabel("Data", { exact: true }).fill(date);
+  await expect(page.getByLabel("Início")).toBeVisible();
+  // 06:00 is before the default opening time and is not offered in the free list.
+  await page.getByLabel("Outro horário (digitar)").check();
+  await page.getByLabel("Horário de início").fill("06:00");
+  await page.getByLabel("Nome da cliente").fill(client);
+  await page.getByLabel("Telefone (WhatsApp)").fill("(11) 98888-7777");
+  await page.getByRole("button", { name: "Confirmar agendamento" }).click();
+
+  const warning = page
+    .getByRole("alert")
+    .filter({ hasText: "Este horário está fora do expediente." });
+  await expect(warning).toBeVisible();
+  // Going back keeps the form and creates nothing.
+  await warning.getByRole("button", { name: "Voltar" }).click();
+  await expect(warning).toHaveCount(0);
+  await expect(page.getByLabel("Nome da cliente")).toHaveValue(client);
+
+  await page.getByRole("button", { name: "Confirmar agendamento" }).click();
+  await expect(warning).toBeVisible();
+  await warning.getByRole("button", { name: "Agendar mesmo assim" }).click();
+
+  await expect(
+    page.getByRole("status").filter({ hasText: `Agendamento confirmado: ${client}` }),
+  ).toBeVisible({ timeout: 30_000 });
+  const item = page.getByRole("listitem").filter({ hasText: client });
+  await expect(item).toContainText("06:00–07:00");
+  await expect(item).toContainText("Fora do expediente");
+});

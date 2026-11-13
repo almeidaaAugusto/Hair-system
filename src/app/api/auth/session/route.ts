@@ -8,8 +8,11 @@ import {
 import {
   ADMIN_SESSION_COOKIE_NAME,
   createAdminSessionCookie,
+  getAdminSessionCookie,
   getAdminSessionCookieOptions,
+  revokeAdminSessions,
 } from "@/server/auth/admin-session";
+import { isSameOrigin } from "@/server/http/request-guards";
 import { logUnexpectedServerError } from "@/server/observability/log-unexpected-server-error";
 
 export const dynamic = "force-dynamic";
@@ -18,11 +21,7 @@ export const runtime = "nodejs";
 const MAX_AUTH_AGE_SECONDS = 5 * 60;
 
 function assertSameOrigin(request: Request): void {
-  const origin = request.headers.get("origin");
-  const requestUrl = new URL(request.url);
-  const host = request.headers.get("host");
-  const expectedOrigin = host ? `${requestUrl.protocol}//${host}` : requestUrl.origin;
-  if (!origin || origin !== expectedOrigin) {
+  if (!isSameOrigin(request)) {
     throw new AuthorizationError("Requisição de sessão não autorizada.", 403);
   }
 }
@@ -77,6 +76,19 @@ export async function POST(request: Request): Promise<Response> {
 export async function DELETE(request: Request): Promise<Response> {
   try {
     assertSameOrigin(request);
+
+    // Revoke refresh tokens so a copied cookie cannot outlive the logout. A cookie
+    // that is missing, expired or invalid must not block the logout itself.
+    const cookie = getAdminSessionCookie(request);
+    if (cookie) {
+      try {
+        await revokeAdminSessions(cookie);
+      } catch (error) {
+        if (!(error instanceof AuthorizationError)) {
+          logUnexpectedServerError("/api/auth/session", error);
+        }
+      }
+    }
 
     const response = noStoreResponse();
     response.cookies.set(ADMIN_SESSION_COOKIE_NAME, "", {

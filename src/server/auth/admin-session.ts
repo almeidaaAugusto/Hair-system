@@ -48,6 +48,21 @@ export function getAdminSessionCookieOptions() {
   };
 }
 
+/**
+ * Revokes the refresh tokens of the user that owns a valid session cookie.
+ * Throws an AuthorizationError when the cookie is not valid (nothing to revoke).
+ */
+export async function revokeAdminSessions(cookie: string): Promise<void> {
+  const auth = getAuth(getAdminApp());
+  let uid: string;
+  try {
+    uid = (await auth.verifySessionCookie(cookie, false)).uid;
+  } catch (error) {
+    throw mapFirebaseAuthorizationError(error);
+  }
+  await auth.revokeRefreshTokens(uid);
+}
+
 export async function verifyAdminSessionCookie(cookie: string): Promise<AdminContext> {
   try {
     const claims = await getAuth(getAdminApp()).verifySessionCookie(cookie, true);

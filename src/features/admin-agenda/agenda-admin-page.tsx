@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { Appointment, TimeBlock } from "@/domain/appointments/appointment";
 import { fetchAdmin } from "@/features/admin-auth/admin-api-client";
+import { UserMessageError, toUserMessage } from "@/features/shared/user-message";
 import { AdminNavigation } from "@/features/admin-auth/admin-navigation";
 import { formatBrazilianReal } from "@/features/admin-services/money";
 
@@ -24,6 +25,8 @@ import {
 import { getPaymentStatus, isReminderDue } from "@/domain/appointments/attendance";
 
 import { appointmentStatusLabels, describePayment, isAppointmentStarted } from "./agenda-finance";
+import { exceptionLabels, getAppointmentExceptions } from "./booking-exceptions";
+import { DAY_CHECK_INTERVAL_MS, advanceDay } from "./day-tracking";
 import { AppointmentForm, AttendanceForm, BlockForm, RescheduleForm } from "./agenda-forms";
 import { getMessageUrl } from "./agenda-messages";
 import { RemindersPanel } from "./reminders-panel";
@@ -153,6 +156,11 @@ function DayAgenda({
                       {payment}
                     </span>
                   ) : null}
+                  {getAppointmentExceptions(appointment).map((exception) => (
+                    <span className="agenda-badge payment-not-recorded" key={exception}>
+                      {exceptionLabels[exception]}
+                    </span>
+                  ))}
                   {reminderDue ? (
                     <span className="agenda-badge payment-not-recorded">Lembrete pendente</span>
                   ) : null}
@@ -424,9 +432,33 @@ function MonthAgenda({
 }
 
 export function AgendaAdminPage() {
-  const [today] = useState(() => getTodayLocalDate());
+  const [day, setDay] = useState(() => {
+    const current = getTodayLocalDate();
+    return { today: current, selectedDate: current };
+  });
+  const { today, selectedDate: date } = day;
   const [view, setView] = useState<AgendaView>("day");
-  const [date, setDate] = useState(today);
+  const busyRef = useRef(false);
+  function setDate(selected: string) {
+    setDay((previous) => ({ ...previous, selectedDate: selected }));
+  }
+
+  // The installed app can stay open for days: re-read "today" when she comes
+  // back to it and periodically, so the day (and the 24h reminders) never go stale.
+  useEffect(() => {
+    const syncDay = () => setDay((previous) => advanceDay(previous, getTodayLocalDate()));
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") syncDay();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", syncDay);
+    const timer = window.setInterval(syncDay, DAY_CHECK_INTERVAL_MS);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", syncDay);
+      window.clearInterval(timer);
+    };
+  }, []);
   const [reloadKey, setReloadKey] = useState(0);
   const [panel, setPanel] = useState<Panel>();
   const [message, setMessage] = useState<string>();
@@ -455,7 +487,7 @@ export function AgendaAdminPage() {
         const query = new URLSearchParams({ from, to });
         const response = await fetchAdmin(`/api/admin/appointments?${query}`);
         if (!response.ok)
-          throw new Error(
+          throw new UserMessageError(
             getAgendaErrorMessage(
               await response.json().catch(() => null),
               "Não foi possível carregar a agenda.",
@@ -466,7 +498,7 @@ export function AgendaAdminPage() {
       } catch (error) {
         setState({
           status: "error",
-          message: error instanceof Error ? error.message : "Não foi possível carregar a agenda.",
+          message: toUserMessage(error, "Não foi possível carregar a agenda."),
         });
       }
     })();
@@ -485,13 +517,15 @@ export function AgendaAdminPage() {
   }
 
   async function runAction(url: string, id: string, success: string, confirmation?: string) {
+    if (busyRef.current) return;
     if (confirmation && !window.confirm(confirmation)) return;
+    busyRef.current = true;
     setBusyId(id);
     setMessage(undefined);
     try {
       const response = await fetchAdmin(url, { method: "POST" });
       if (!response.ok)
-        throw new Error(
+        throw new UserMessageError(
           getAgendaErrorMessage(
             await response.json().catch(() => null),
             "Não foi possível concluir a operação.",
@@ -500,8 +534,9 @@ export function AgendaAdminPage() {
       setMessage(success);
       reload();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível concluir a operação.");
+      setMessage(toUserMessage(error, "Não foi possível concluir a operação."));
     } finally {
+      busyRef.current = false;
       setBusyId(undefined);
     }
   }

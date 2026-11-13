@@ -68,6 +68,7 @@ describe("services administration collection route", () => {
     const response = await POST(
       new Request("http://localhost/api/admin/services", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: "Corte" }),
       }),
     );
@@ -93,6 +94,7 @@ describe("services administration collection route", () => {
     const response = await POST(
       new Request("http://localhost/api/admin/services", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: "Corte feminino",
           durationMinutes: 60,
@@ -125,6 +127,7 @@ describe("services administration collection route", () => {
     const response = await POST(
       new Request("http://localhost/api/admin/services", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: "" }),
       }),
     );
@@ -145,6 +148,7 @@ describe("services administration collection route", () => {
     const response = await POST(
       new Request("http://localhost/api/admin/services", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: "{",
       }),
     );
@@ -167,5 +171,33 @@ describe("services administration collection route", () => {
       "/api/admin/services",
       unexpectedError,
     );
+  });
+
+  it("rejects a non JSON content type with 415 and no-store", async () => {
+    mocks.authenticateAdmin.mockResolvedValue(admin);
+
+    const response = await POST(
+      new Request("http://localhost/api/admin/services", {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: "{}",
+      }),
+    );
+
+    expect(response.status).toBe(415);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(mocks.createService).not.toHaveBeenCalled();
+  });
+
+  it("sends no-store on reads and errors", async () => {
+    mocks.authenticateAdmin.mockResolvedValue(admin);
+    mocks.listServices.mockResolvedValue([]);
+
+    const ok = await GET(new Request("http://localhost/api/admin/services"));
+    expect(ok.headers.get("cache-control")).toBe("no-store");
+
+    mocks.authenticateAdmin.mockRejectedValue(new AuthorizationError("x", 401));
+    const denied = await GET(new Request("http://localhost/api/admin/services"));
+    expect(denied.headers.get("cache-control")).toBe("no-store");
   });
 });

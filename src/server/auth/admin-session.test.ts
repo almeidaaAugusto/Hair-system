@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createSessionCookie: vi.fn(),
+  revokeRefreshTokens: vi.fn(),
   getAdminApp: vi.fn(),
   verifySessionCookie: vi.fn(),
 }));
@@ -9,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("firebase-admin/auth", () => ({
   getAuth: () => ({
     createSessionCookie: mocks.createSessionCookie,
+    revokeRefreshTokens: mocks.revokeRefreshTokens,
     verifySessionCookie: mocks.verifySessionCookie,
   }),
 }));
@@ -23,6 +25,7 @@ import {
   createAdminSessionCookie,
   getAdminSessionCookie,
   getAdminSessionCookieOptions,
+  revokeAdminSessions,
   verifyAdminSessionCookie,
 } from "./admin-session";
 import { AuthorizationError } from "./admin-context";
@@ -150,5 +153,24 @@ describe("admin session", () => {
 
     vi.stubEnv("NODE_ENV", "production");
     expect(getAdminSessionCookieOptions()).toMatchObject({ secure: true });
+  });
+
+  it("revokes the refresh tokens of the user that owns a valid cookie", async () => {
+    mocks.verifySessionCookie.mockResolvedValue({ uid: "admin-1" });
+    mocks.revokeRefreshTokens.mockResolvedValue(undefined);
+
+    await revokeAdminSessions("session");
+
+    expect(mocks.verifySessionCookie).toHaveBeenCalledWith("session", false);
+    expect(mocks.revokeRefreshTokens).toHaveBeenCalledWith("admin-1");
+  });
+
+  it("does not revoke anything for an invalid cookie", async () => {
+    mocks.verifySessionCookie.mockRejectedValue(
+      Object.assign(new Error("private"), { code: "auth/argument-error" }),
+    );
+
+    await expect(revokeAdminSessions("bad")).rejects.toBeInstanceOf(AuthorizationError);
+    expect(mocks.revokeRefreshTokens).not.toHaveBeenCalled();
   });
 });

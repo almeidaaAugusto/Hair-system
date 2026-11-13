@@ -158,7 +158,7 @@ describe("rescheduleAppointment", () => {
           startAt: base.startAt,
         }),
       ),
-    ).toBe("SERVICE_UNAVAILABLE");
+    ).toBe("SERVICE_REQUIRES_EVALUATION");
     expect(
       code(() =>
         rescheduleAppointment(base, {

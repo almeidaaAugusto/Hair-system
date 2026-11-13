@@ -57,3 +57,10 @@ Painel administrativo → Route Handlers Next.js (Node, autenticação e valida�
 ## Decisão: backend administrativo confiável
 
 Neste marco, Route Handlers Next.js no runtime Node autenticam e validam cada operação administrativa e executam transações no Firestore via Admin SDK. Esse servidor confiável é equivalente ao backend previsto nos requisitos; domínio e repositório independem dos handlers e permitem futura extração para Cloud Functions. As regras negam acesso direto do navegador às coleções de agenda. O fluxo público permanece para outra entrega.
+
+## Decisão: endurecimento do piloto (2026-11-13)
+
+- Mutações em `/api/admin/*` exigem `Origin` igual ao host da requisição e `Content-Type: application/json` (415 caso contrário). Clientes fora do navegador precisam enviar `Origin`.
+- Sair do painel revoga os refresh tokens da usuária: a sessão é encerrada em **todos** os aparelhos. Para o piloto com uma única profissional, isso é desejado.
+- `allowExceptions` (exceções administrativas de expediente e avaliação) é exclusivo das rotas administrativas autenticadas. **A futura rota pública de agendamento deve usar um schema próprio, estrito, que não aceite esse campo**, com teste garantindo a rejeição; hoje o campo vive nos schemas de entrada compartilhados de `src/domain/appointments/appointment.ts`.
+- Após cada deploy de produção, executar um smoke test com uma mutação real (ex.: salvar o expediente sem alterações e criar/cancelar um agendamento de teste) para confirmar a checagem de origem atrás do proxy da Vercel.
