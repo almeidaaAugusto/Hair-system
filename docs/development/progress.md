@@ -4,9 +4,9 @@ Memória compartilhada entre sessões e agentes. Leia antes de começar; atualiz
 
 ## Estado atual
 
-- **Marco:** fechamento do piloto ([piloto-primeira-entrega.md](../product/piloto-primeira-entrega.md)) — painel administrativo em uso real pela profissional antes da página pública.
+- **Marco:** piloto entregue e em uso pela profissional desde 2026-11-13; coletando feedback ([piloto-primeira-entrega.md](../product/piloto-primeira-entrega.md)). Próximo marco em definição.
 - **Código:** endurecimento do piloto integrado ao `main` do `origin` (`df11027`) e publicado em produção em 2026-11-13.
-- **Produção:** login, Agenda e Serviços verificados funcionando em 2026-11-13 (sem dados cadastrados ainda).
+- **Produção:** em uso real (dados reais de clientes). Mudanças só via branch + gate completo + revisão.
 
 ## Ambientes
 
@@ -23,11 +23,16 @@ Memória compartilhada entre sessões e agentes. Leia antes de começar; atualiz
 
 ## Próximos passos
 
-1. Smoke test de mutações em produção: salvar expediente, criar e cancelar um agendamento de teste (confirma a checagem de Origin atrás da Vercel).
-2. Conta da profissional no Firebase Auth de produção com claims `admin` + `salonId` (mesmo `salonId` da conta já usada) via `npm run firebase:set-admin`.
-3. Entrega no celular dela e cadastro dos serviços reais; coletar feedback (perguntas no doc do piloto).
+1. Definir o próximo marco de evolução com o usuário.
+2. Registrar o feedback da profissional ao fim de 1–2 semanas de uso (perguntas no doc do piloto).
 
 ## Log
+
+### 2026-11-13 — Piloto entregue
+
+- **O que:** usuário concluiu smoke test, conta da profissional, instalação no celular dela, cadastro dos serviços reais e conferência do expediente.
+- **Verificação:** informado pelo usuário.
+- **Pendências:** feedback após 1–2 semanas; definir próximo marco.
 
 ### 2026-11-13 — Deploy do endurecimento em produção
 
